@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<!-- BUILD_TAG: 2026-07-07g -->
+<!-- BUILD_TAG: 2026-07-07h -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
@@ -81,6 +81,9 @@
   .loading-inline { font-size:13px; color:var(--muted); margin-top:8px; font-style:italic; }
   .job-detail { font-size:14px; color:var(--muted); line-height:1.6; background:var(--bg); padding:10px 12px; border-radius:10px; margin-bottom:10px; white-space:pre-wrap; max-height:300px; overflow-y:auto; }
   .sheet-link { display:inline-block; font-size:14px; color:var(--green); text-decoration:none; margin-bottom:14px; }
+  .paste-hint { font-size:13px; color:var(--amber); background:var(--amber-soft); padding:10px 12px; border-radius:10px; line-height:1.6; margin-bottom:8px; }
+  .paste-area { width:100%; min-height:120px; background:#15181d; color:var(--text); border:1px solid var(--border); border-radius:12px; padding:12px 13px; font-size:14px; line-height:1.6; font-family:inherit; margin-bottom:10px; resize:vertical; }
+  .paste-area:focus { outline:none; border-color:var(--green); }
   .gen-btn { width:100%; background:var(--green); color:#04310f; border:none; border-radius:12px; padding:15px; font-size:16px; font-weight:600; cursor:pointer; font-family:inherit; }
   .gen-btn:active { filter:brightness(0.95); }
   .gen-btn:disabled { background:#3a4148; }
@@ -163,12 +166,12 @@
     </div>
   </div>
 
-  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-07-07g</div>
+  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-07-07h</div>
 
   <div class="toast" id="toast">コピーしました！</div>
 
 <script>
-console.log('BUILD_TAG: 2026-07-07g');
+console.log('BUILD_TAG: 2026-07-07h');
 
 // ---------- ③ ロゴ／Castのタップで更新 ----------
 document.getElementById('brand').onclick = loadJobs;
@@ -368,17 +371,29 @@ document.querySelectorAll('.fbtn').forEach(function(btn){
 const overlay = document.getElementById('overlay');
 let currentJob = null;
 
+function isLancers(job){ return String(job.platform||'').indexOf('ランサーズ') !== -1; }
+
 function openSheet(job){
   currentJob = job;
   document.getElementById('sheet-title').textContent = job.title;
+  const lancers = isLancers(job);
   // 初期表示：概要＋ローディング表示。詳細は非同期で差し替え
   // 一覧で取得済みのクライアント名があれば、開いた瞬間にそれを表示する
-  const knownClient = job.clientName
-    ? '👤 ' + esc(job.clientName) + (job.certified ? ' <span class="cert-mark">認定</span>' : '')
-    : '👤 クライアント名を取得中…';
-  let html = '<div id="client-line" class="client-line">' + knownClient + '</div>';
-  html += '<div id="full-body" class="job-detail">'+esc(job.summary||'（概要なし）')+'<div class="loading-inline">📄 募集文の全文を読み込み中…</div></div>';
+  let html = '';
+  if(job.clientName){
+    html += '<div id="client-line" class="client-line">👤 ' + esc(job.clientName) + (job.certified ? ' <span class="cert-mark">認定</span>' : '') + '</div>';
+  } else if(!lancers){
+    html += '<div id="client-line" class="client-line">👤 クライアント名を取得中…</div>';
+  }
+  html += '<div id="full-body" class="job-detail">'+esc(job.summary||'（概要なし）')
+        + (lancers ? '' : '<div class="loading-inline">📄 募集文の全文を読み込み中…</div>')
+        + '</div>';
   html += '<a class="sheet-link" href="'+esc(job.url)+'" target="_blank" rel="noopener">🔗 案件ページを開く</a>';
+  if(lancers){
+    // ランサーズは自動取得不可のため、募集本文の手動貼り付けで生成の質を上げる
+    html += '<div class="paste-hint">📋 ランサーズは募集文を自動取得できません。上のリンクから案件ページを開き、募集本文をコピーして下に貼り付けると、内容に沿った応募文を作成できます（貼り付けなしでも概要だけで作成可能）。</div>';
+    html += '<textarea class="paste-area" id="paste-area" placeholder="ここに募集本文を貼り付け（任意）"></textarea>';
+  }
   if(job.status==='応募済み' && job.body){
     html += renderResult(job.body, true, job.note);
   } else {
@@ -388,6 +403,8 @@ function openSheet(job){
   overlay.classList.add('show');
   document.body.classList.add('modal-open');
   bindSheetButtons();
+
+  if(lancers) return; // ランサーズは自動取得しない
 
   // 非同期で全文＋クライアント名を取得して表示を差し替え
   api('detail', { url: job.url }).then(function(detail){
@@ -406,7 +423,7 @@ function openSheet(job){
     if(fb && detail.body){
       fb.textContent = detail.body;
     } else if(fb && !detail.body){
-      fb.textContent = job.summary || '（取得できませんでした）';
+      fb.textContent = (job.summary || '') + '\n\n（全文は取得できなかったため概要を表示しています）';
     }
   }).catch(function(){
     const cl = document.getElementById('client-line');
@@ -443,13 +460,19 @@ function bindSheetButtons(){
   if(u) u.onclick=doUndo;
 }
 
+function getPastedText(){
+  const ta = document.getElementById('paste-area');
+  return ta ? ta.value.trim() : '';
+}
 function doGenerate(){
+  const pasted = getPastedText();
   showTyping();
-  api('generate', { row: currentJob.row }).then(handleResult).catch(failHandler);
+  api('generate', { row: currentJob.row, pasted: pasted }).then(handleResult).catch(failHandler);
 }
 function doRegenerate(){
+  const pasted = getPastedText();
   showTyping();
-  api('regenerate', { row: currentJob.row }).then(handleResult).catch(failHandler);
+  api('regenerate', { row: currentJob.row, pasted: pasted }).then(handleResult).catch(failHandler);
 }
 function doUndo(){
   api('unapply', { row: currentJob.row }).then(function(){
@@ -481,6 +504,7 @@ function handleResult(res){
   document.getElementById('sheet-body').innerHTML =
     '<div class="job-detail">'+esc(currentJob.summary||'')+'</div>'+
     '<a class="sheet-link" href="'+esc(currentJob.url)+'" target="_blank" rel="noopener">🔗 案件ページを開く</a>'+
+    (isLancers(currentJob) ? '<textarea class="paste-area" id="paste-area" placeholder="作り直す場合：募集本文を貼り付け（任意）"></textarea>' : '')+
     renderResult(res.body, true, res.note);
   bindSheetButtons();
   render();
