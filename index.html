@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<!-- BUILD_TAG: 2026-07-07f -->
+<!-- BUILD_TAG: 2026-07-07g -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
@@ -29,7 +29,7 @@
   .hrow:active { opacity:0.7; }
   .reload { float:right; font-size:14px; color:var(--green); background:none; border:1px solid var(--green); border-radius:8px; padding:5px 12px; cursor:pointer; margin-top:env(safe-area-inset-top); }
 
-  .stats { display:flex; gap:8px; padding:10px 14px; background:var(--card); border-bottom:1px solid var(--border); }
+  .stats { display:flex; gap:7px; padding:10px 12px; background:var(--card); border-bottom:1px solid var(--border); }
   .stat { flex:1; text-align:center; background:var(--bg); border-radius:10px; padding:8px 4px; border:1px solid transparent; cursor:pointer; }
   .stat.active { border-color:var(--green); }
   .stat .num { font-size:26px; font-weight:600; }
@@ -118,7 +118,8 @@
   <div class="stats">
     <div class="stat" data-sf="all"><div class="num" id="s-total">-</div><div class="lbl">全案件</div></div>
     <div class="stat active" data-sf="todo"><div class="num" id="s-todo">-</div><div class="lbl">未応募</div></div>
-    <div class="stat" data-sf="done"><div class="num" id="s-done">-</div><div class="lbl">応募済み</div></div>
+    <div class="stat" data-sf="week"><div class="num" id="s-week">-</div><div class="lbl">今週</div></div>
+    <div class="stat" data-sf="today"><div class="num" id="s-today">-</div><div class="lbl">今日</div></div>
   </div>
 
   <div class="filters" id="filters">
@@ -162,12 +163,12 @@
     </div>
   </div>
 
-  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-07-07f</div>
+  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-07-07g</div>
 
   <div class="toast" id="toast">コピーしました！</div>
 
 <script>
-console.log('BUILD_TAG: 2026-07-07f');
+console.log('BUILD_TAG: 2026-07-07g');
 
 // ---------- ③ ロゴ／Castのタップで更新 ----------
 document.getElementById('brand').onclick = loadJobs;
@@ -269,16 +270,39 @@ function loadJobs(){
   });
 }
 
-function render(){
-  const total = JOBS.length;
-  const done = JOBS.filter(function(j){return j.status==='応募済み';}).length;
-  document.getElementById('s-total').textContent = total;
-  document.getElementById('s-done').textContent = done;
-  document.getElementById('s-todo').textContent = total - done;
+// 今日0時・今週（月曜0時）の境界を返す
+function timeBounds(){
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const dow = (now.getDay() + 6) % 7; // 月曜=0
+  const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dow).getTime();
+  return { todayStart: todayStart, weekStart: weekStart };
+}
 
-  let shown = JOBS.slice();
-  if(filterStatus==='todo') shown = shown.filter(function(j){return j.status!=='応募済み';});
+function render(){
+  const tb = timeBounds();
+  // 募集終了（closed）は一覧に一切載せない
+  const visible = JOBS.filter(function(j){ return !j.closed; });
+  // 全案件・未応募のカウントは期限切れを含めない
+  const active = visible.filter(function(j){ return !j.expired; });
+  const total = active.length;
+  const todo = active.filter(function(j){ return j.status!=='応募済み'; }).length;
+  // 今日・今週の応募数（応募日時ベース。週は月曜0時でリセット）
+  const applied = JOBS.filter(function(j){ return j.status==='応募済み' && j.appliedTs; });
+  const week = applied.filter(function(j){ return j.appliedTs >= tb.weekStart; }).length;
+  const today = applied.filter(function(j){ return j.appliedTs >= tb.todayStart; }).length;
+
+  document.getElementById('s-total').textContent = total;
+  document.getElementById('s-todo').textContent = todo;
+  document.getElementById('s-week').textContent = week;
+  document.getElementById('s-today').textContent = today;
+
+  let shown = visible.slice();
+  if(filterStatus==='all') shown = shown.filter(function(j){return !j.expired;});
+  if(filterStatus==='todo') shown = shown.filter(function(j){return j.status!=='応募済み' && !j.expired;});
   if(filterStatus==='done') shown = shown.filter(function(j){return j.status==='応募済み';});
+  if(filterStatus==='week') shown = shown.filter(function(j){return j.status==='応募済み' && j.appliedTs && j.appliedTs >= timeBounds().weekStart;});
+  if(filterStatus==='today') shown = shown.filter(function(j){return j.status==='応募済み' && j.appliedTs && j.appliedTs >= timeBounds().todayStart;});
   if(filterGenre) shown = shown.filter(function(j){return j.genre===filterGenre;});
 
   const list = document.getElementById('list');
