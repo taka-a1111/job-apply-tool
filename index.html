@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<!-- BUILD_TAG: 2026-07-07e -->
+<!-- BUILD_TAG: 2026-07-07f -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
@@ -162,12 +162,12 @@
     </div>
   </div>
 
-  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-07-07e</div>
+  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-07-07f</div>
 
   <div class="toast" id="toast">コピーしました！</div>
 
 <script>
-console.log('BUILD_TAG: 2026-07-07e');
+console.log('BUILD_TAG: 2026-07-07f');
 
 // ---------- ③ ロゴ／Castのタップで更新 ----------
 document.getElementById('brand').onclick = loadJobs;
@@ -238,13 +238,34 @@ function loadJobs(){
       '<div class="config-warn">⚙️ 初期設定が必要です。<br>index.html 内の CONFIG に GASのURL（/exec）と TOKEN を貼ってから、GitHubにアップロードしてください。</div>';
     return;
   }
-  document.getElementById('list').innerHTML = '<div class="loading">案件を読み込み中…</div>';
+
+  // 前回取得した一覧が端末に残っていれば、まずそれを即表示（体感を高速化）
+  let hadCache = false;
+  try{
+    const saved = localStorage.getItem('cast_jobs');
+    if(saved){
+      JOBS = JSON.parse(saved);
+      render();
+      hadCache = true;
+      showToastMsg('最新を確認中…');
+    }
+  }catch(e){}
+  if(!hadCache){
+    document.getElementById('list').innerHTML = '<div class="loading">案件を読み込み中…</div>';
+  }
+
+  // 裏で最新を取得して差し替え
   api('jobs').then(function(data){
     JOBS = (data && data.jobs) || [];
-    setUpdatedAt();
+    try{ localStorage.setItem('cast_jobs', JSON.stringify(JOBS)); }catch(e){}
     render();
+    if(hadCache) showToastMsg('最新に更新しました');
   }).catch(function(e){
-    document.getElementById('list').innerHTML = '<div class="empty">読み込みエラー：'+esc(String(e.message||e))+'</div>';
+    if(!hadCache){
+      document.getElementById('list').innerHTML = '<div class="empty">読み込みエラー：'+esc(String(e.message||e))+'</div>';
+    }else{
+      showToastMsg('更新に失敗（前回のデータを表示中）');
+    }
   });
 }
 
@@ -411,6 +432,7 @@ function doUndo(){
     currentJob.status='未応募'; currentJob.body='';
     const idx=JOBS.findIndex(function(j){return j.row===currentJob.row;});
     if(idx>=0){ JOBS[idx].status='未応募'; JOBS[idx].body=''; }
+    saveLocalJobs();
     render(); openSheet(currentJob);
   }).catch(failHandler);
 }
@@ -421,6 +443,8 @@ function showTyping(){
     '<a class="sheet-link" href="'+esc(currentJob.url)+'" target="_blank" rel="noopener">🔗 案件ページを開く</a>'+
     '<div class="typing-box"><span></span><span></span><span></span></div>';
 }
+function saveLocalJobs(){ try{ localStorage.setItem('cast_jobs', JSON.stringify(JOBS)); }catch(e){} }
+
 function handleResult(res){
   if(res.error){
     document.getElementById('sheet-body').innerHTML += '<div class="skip-msg">エラー：'+esc(res.error)+'</div>';
@@ -429,6 +453,7 @@ function handleResult(res){
   currentJob.body=res.body; currentJob.status=res.status; currentJob.note=res.note||'';
   const idx=JOBS.findIndex(function(j){return j.row===currentJob.row;});
   if(idx>=0){ JOBS[idx].status=res.status; JOBS[idx].body=res.body; JOBS[idx].note=res.note||''; }
+  saveLocalJobs();
   document.getElementById('sheet-body').innerHTML =
     '<div class="job-detail">'+esc(currentJob.summary||'')+'</div>'+
     '<a class="sheet-link" href="'+esc(currentJob.url)+'" target="_blank" rel="noopener">🔗 案件ページを開く</a>'+
@@ -464,6 +489,7 @@ document.querySelectorAll('.reason-item').forEach(function(btn){
     const url = hideTargetJob.url;
     // ローカルでも即座に消す（再読み込みなしで反映）
     JOBS = JOBS.filter(function(x){ return x.url !== url; });
+    saveLocalJobs();
     closeHideMenu();
     render();
     showToastMsg('非表示にしました');
