@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<!-- BUILD_TAG: 2026-07-13a -->
+<!-- BUILD_TAG: 2026-07-13b -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
@@ -175,12 +175,12 @@
     </div>
   </div>
 
-  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-07-13a</div>
+  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-07-13b</div>
 
   <div class="toast" id="toast">コピーしました！</div>
 
 <script>
-console.log('BUILD_TAG: 2026-07-13a');
+console.log('BUILD_TAG: 2026-07-13b');
 
 // ---------- ③ ロゴ／Castのタップで更新 ----------
 document.getElementById('brand').onclick = loadJobs;
@@ -410,7 +410,7 @@ function openSheet(job){
   if(job.status==='応募済み' && job.body){
     html += renderResult(job.body, true, job.note);
   } else {
-    html += '<button class="gen-btn" id="genbtn">この案件の応募文を作成</button>';
+    html += '<button class="gen-btn" id="genbtn">応募文作成</button>';
   }
   document.getElementById('sheet-body').innerHTML = html;
   overlay.classList.add('show');
@@ -533,14 +533,50 @@ function handleResult(res){
   currentJob.body=res.body; currentJob.status=res.status; currentJob.note=res.note||'';
   const idx=JOBS.findIndex(function(j){return j.row===currentJob.row;});
   if(idx>=0){ JOBS[idx].status=res.status; JOBS[idx].body=res.body; JOBS[idx].note=res.note||''; }
+  // 今日・今週の応募数を再読み込みなしで反映
+  if(res.status==='応募済み'){
+    currentJob.appliedTs = Date.now();
+    if(idx>=0) JOBS[idx].appliedTs = currentJob.appliedTs;
+  }
   saveLocalJobs();
   document.getElementById('sheet-body').innerHTML =
     '<div class="job-detail">'+esc(currentJob.summary||'')+'</div>'+
-    '<a class="sheet-link" href="'+esc(currentJob.url)+'" target="_blank" rel="noopener">🔗 案件ページを開く</a>'+
+    '<a class="sheet-link" id="open-after" href="'+esc(currentJob.url)+'" target="_blank" rel="noopener">🔗 案件ページを開く</a>'+
     (isLancers(currentJob) ? '<textarea class="paste-area" id="paste-area" placeholder="作り直す場合：募集本文を貼り付け（任意）"></textarea>' : '')+
     renderResult(res.body, true, res.note);
   bindSheetButtons();
+  // 案件ページを開いたらシートを閉じて最新情報に更新（戻ってきたら一覧がすぐ使える）
+  const oa = document.getElementById('open-after');
+  if(oa) oa.onclick = function(){ setTimeout(function(){ closeSheet(); loadJobs(); }, 100); };
   render();
+  // 生成できたら応募文を自動でコピー（応募不可のときは除く）
+  if(res.body && res.body.indexOf('【応募不可】')!==0){
+    autoCopy(res.body);
+  }
+}
+
+// 生成直後の自動コピー。ブラウザに拒否されたら旧方式で再試行し、
+// それでもダメなら静かに終了（手動の「コピー」ボタンで対応してもらう）
+function autoCopy(text){
+  function legacy(){
+    try{
+      const ta=document.createElement('textarea');
+      ta.value=text; ta.setAttribute('readonly','');
+      ta.style.position='fixed'; ta.style.opacity='0';
+      document.body.appendChild(ta); ta.select();
+      let ok=false;
+      try{ ok=document.execCommand('copy'); }catch(e){ ok=false; }
+      document.body.removeChild(ta);
+      if(ok) showToastMsg('応募文をコピーしました');
+    }catch(e){}
+  }
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(function(){
+      showToastMsg('応募文をコピーしました');
+    }).catch(legacy);
+  } else {
+    legacy();
+  }
 }
 function failHandler(e){
   document.getElementById('sheet-body').innerHTML += '<div class="skip-msg">通信エラー：'+esc(String(e.message||e))+'</div>';
