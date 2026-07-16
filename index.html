@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<!-- BUILD_TAG: 2026-07-13b -->
+<!-- BUILD_TAG: 2026-07-16a -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
@@ -77,10 +77,10 @@
   .grip { width:36px; height:4px; background:#3a4148; border-radius:2px; margin:0 auto 10px; }
   .stitle { font-size:16.5px; font-weight:600; line-height:1.4; padding-right:30px; }
   .close { position:absolute; top:14px; right:14px; font-size:26px; color:var(--muted); cursor:pointer; }
-  .sheet-body { padding:14px 16px calc(14px + env(safe-area-inset-bottom)); overflow-y:auto; overscroll-behavior:contain; }
+  .sheet-body { flex:1 1 auto; min-height:0; padding:14px 16px calc(14px + env(safe-area-inset-bottom)); overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
   .client-line { font-size:14px; color:var(--text); background:rgba(230,189,92,.12); border:1px solid #5a4a1a; padding:8px 12px; border-radius:8px; margin-bottom:10px; }
   .loading-inline { font-size:13px; color:var(--muted); margin-top:8px; font-style:italic; }
-  .job-detail { font-size:14px; color:var(--muted); line-height:1.6; background:var(--bg); padding:10px 12px; border-radius:10px; margin-bottom:10px; white-space:pre-wrap; max-height:300px; overflow-y:auto; }
+  .job-detail { font-size:14px; color:var(--muted); line-height:1.6; background:var(--bg); padding:10px 12px; border-radius:10px; margin-bottom:10px; white-space:pre-wrap; }
   .sheet-link { display:inline-block; font-size:14px; color:var(--green); text-decoration:none; margin-bottom:14px; }
   .paste-hint { font-size:13px; color:var(--amber); background:var(--amber-soft); padding:10px 12px; border-radius:10px; line-height:1.6; margin-bottom:8px; }
   .paste-area { width:100%; min-height:120px; background:#15181d; color:var(--text); border:1px solid var(--border); border-radius:12px; padding:12px 13px; font-size:14px; line-height:1.6; font-family:inherit; margin-bottom:10px; resize:vertical; }
@@ -175,12 +175,12 @@
     </div>
   </div>
 
-  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-07-13b</div>
+  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-07-16a</div>
 
   <div class="toast" id="toast">コピーしました！</div>
 
 <script>
-console.log('BUILD_TAG: 2026-07-13b');
+console.log('BUILD_TAG: 2026-07-16a');
 
 // ---------- ③ ロゴ／Castのタップで更新 ----------
 document.getElementById('brand').onclick = loadJobs;
