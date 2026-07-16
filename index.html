@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<!-- BUILD_TAG: 2026-07-16a -->
+<!-- BUILD_TAG: 2026-07-16b -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
@@ -72,7 +72,7 @@
 
   .overlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); display:none; align-items:flex-end; z-index:100; }
   .overlay.show { display:flex; }
-  .sheet { background:var(--card); width:100%; max-height:92%; border-radius:18px 18px 0 0; display:flex; flex-direction:column; }
+  .sheet { background:var(--card); width:100%; height:85vh; height:85dvh; max-height:92vh; border-radius:18px 18px 0 0; display:flex; flex-direction:column; }
   .sheet-head { padding:14px 16px 10px; border-bottom:1px solid var(--border); position:relative; }
   .grip { width:36px; height:4px; background:#3a4148; border-radius:2px; margin:0 auto 10px; }
   .stitle { font-size:16.5px; font-weight:600; line-height:1.4; padding-right:30px; }
@@ -175,12 +175,12 @@
     </div>
   </div>
 
-  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-07-16a</div>
+  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-07-16b</div>
 
   <div class="toast" id="toast">コピーしました！</div>
 
 <script>
-console.log('BUILD_TAG: 2026-07-16a');
+console.log('BUILD_TAG: 2026-07-16b');
 
 // ---------- ③ ロゴ／Castのタップで更新 ----------
 document.getElementById('brand').onclick = loadJobs;
