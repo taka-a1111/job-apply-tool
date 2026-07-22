@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<!-- BUILD_TAG: 2026-07-16b -->
+<!-- BUILD_TAG: 2026-07-22b -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
@@ -114,12 +114,39 @@
 
   .toast { position:fixed; bottom:calc(24px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.82); color:#fff; padding:12px 24px; border-radius:24px; font-size:15px; z-index:200; opacity:0; pointer-events:none; transition:opacity 0.2s; }
   .toast.show { opacity:1; }
+
+  /* ① 継続案件バッジ */
+  .cont-tag { display:inline-block; font-size:12px; padding:2px 8px; border-radius:6px; background:rgba(126,200,255,.14); color:#7ec8ff; border:1px solid rgba(126,200,255,.35); margin-top:8px; margin-left:6px; }
+
+  /* 優先度バッジ（A案・ルールベース） */
+  .prio { font-size:11px; padding:2px 8px; border-radius:8px; font-weight:600; white-space:nowrap; }
+  .prio-high { background:rgba(255,110,80,.15); color:#ff9075; border:1px solid rgba(255,110,80,.4); }
+  .prio-mid { background:var(--amber-soft); color:var(--amber); border:1px solid rgba(230,189,92,.35); }
+  .prio-low { background:#22262c; color:#6b7482; border:1px solid var(--border); }
+
+  /* ③ 検索設定画面 */
+  .settings-btn { float:right; font-size:16px; color:var(--muted); background:none; border:1px solid var(--border); border-radius:8px; padding:4px 11px; cursor:pointer; margin-top:env(safe-area-inset-top); margin-right:8px; }
+  .set-section { margin-bottom:18px; }
+  .set-title { font-size:15px; font-weight:600; margin-bottom:4px; }
+  .set-desc { font-size:12.5px; color:var(--muted); line-height:1.6; margin-bottom:10px; }
+  .cat-item { display:flex; align-items:center; gap:10px; background:#15181d; border:1px solid var(--border); border-radius:10px; padding:11px 13px; margin-bottom:6px; font-size:14.5px; cursor:pointer; }
+  .cat-item input { width:19px; height:19px; accent-color:var(--green); flex-shrink:0; }
+  .cat-item.checked { border-color:var(--green); }
+  .set-input { width:100%; background:#15181d; color:var(--text); border:1px solid var(--border); border-radius:10px; padding:11px 13px; font-size:14.5px; font-family:inherit; }
+  .set-input:focus { outline:none; border-color:var(--green); }
+  .kw-row { background:#15181d; border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin-bottom:8px; }
+  .kw-row .set-input { background:var(--bg); margin-bottom:6px; }
+  .kw-del { background:transparent; color:#e88; border:1px solid #6a3a3a; border-radius:8px; padding:5px 12px; font-size:12.5px; cursor:pointer; font-family:inherit; }
+  .kw-add { width:100%; background:transparent; color:var(--green); border:1px dashed var(--green); border-radius:10px; padding:11px; font-size:14px; cursor:pointer; font-family:inherit; margin-top:2px; }
+  .set-save-row { display:flex; gap:8px; margin-top:16px; }
+  .set-note { font-size:12px; color:var(--muted); line-height:1.6; margin-top:12px; }
 </style>
 </head>
 <body>
   <div class="topbar">
   <div class="header">
     <button class="reload" onclick="loadJobs()">更新</button>
+    <button class="settings-btn" onclick="openSettings()">⚙️</button>
     <div class="hrow" id="brand">
       <div class="logo">C</div>
       <h1>Cast</h1>
@@ -175,12 +202,23 @@
     </div>
   </div>
 
-  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-07-16b</div>
+  <div class="overlay" id="settings-overlay">
+    <div class="sheet">
+      <div class="sheet-head">
+        <div class="grip"></div>
+        <div class="stitle">⚙️ 検索設定（クラウドワークス）</div>
+        <span class="close" onclick="closeSettings()">×</span>
+      </div>
+      <div class="sheet-body" id="settings-body"><div class="loading">設定を読み込み中…</div></div>
+    </div>
+  </div>
+
+  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-07-22b</div>
 
   <div class="toast" id="toast">コピーしました！</div>
 
 <script>
-console.log('BUILD_TAG: 2026-07-16b');
+console.log('BUILD_TAG: 2026-07-22b');
 
 // ---------- ③ ロゴ／Castのタップで更新 ----------
 document.getElementById('brand').onclick = loadJobs;
@@ -282,6 +320,47 @@ function loadJobs(){
   });
 }
 
+// ④ 締切切れ判定：サーバーのexpiredフラグに加え、締切日（M/d）からも判定する保険
+function isExpired(j){
+  if(j.expired) return true;
+  const d = String(j.deadline||'').match(/^(\d{1,2})\/(\d{1,2})$/);
+  if(!d) return false;
+  const now = new Date();
+  const cand = new Date(now.getFullYear(), Number(d[1])-1, Number(d[2]), 23, 59, 59);
+  const diff = now - cand; // 過去ならプラス
+  // 過去300日以内に締切が来ていたら期限切れ（それ以上前なら来年の日付とみなす）
+  return diff > 0 && diff < 300*24*60*60*1000;
+}
+
+// ① 継続案件の判定（タイトル・概要のキーワードから推定）
+function isContinuous(j){
+  const hay = String(j.title||'') + ' ' + String(j.summary||'');
+  return /継続|長期|リピート|毎月|毎週|定期|月\s*\d+\s*(本|記事|件|回)|レギュラー/.test(hay);
+}
+
+// 応募優先度スコア（A案・ルールベース／無料・即時）
+// 配点：ジャンル一致+2／報酬 下限5万以上+2・1万以上+1／契約枠がまだ0人+1
+//       認定クライアント+1／契約歴あり+2／継続キーワード+1（最大9点）
+function scoreJob(j){
+  let s = 0;
+  if(['ライティング','HP制作','GAS・自動化','SEOコンサル','AI活用'].indexOf(j.genre)!==-1) s += 2;
+  const m = String(j.reward||'').replace(/,/g,'').match(/(\d+)\s*円/);
+  if(m){ const v = Number(m[1]); if(v>=50000) s+=2; else if(v>=10000) s+=1; }
+  const e = String(j.entry||'').match(/契約\s*(\d+)\s*\/\s*(\d+)/);
+  if(e && Number(e[1])===0) s+=1;
+  if(j.certified) s+=1;
+  if(j.contract) s+=2;
+  if(isContinuous(j)) s+=1;
+  return s;
+}
+// 5点以上=高／3〜4点=中／2点以下=低
+function prioHtml(j){
+  const s = scoreJob(j);
+  if(s>=5) return '<span class="prio prio-high">優先度 高</span>';
+  if(s>=3) return '<span class="prio prio-mid">優先度 中</span>';
+  return '<span class="prio prio-low">優先度 低</span>';
+}
+
 // 今日0時・今週（月曜0時）の境界を返す
 function timeBounds(){
   const now = new Date();
@@ -296,7 +375,7 @@ function render(){
   // 募集終了（closed）は一覧に一切載せない
   const visible = JOBS.filter(function(j){ return !j.closed; });
   // 全案件・未応募のカウントは期限切れを含めない
-  const active = visible.filter(function(j){ return !j.expired; });
+  const active = visible.filter(function(j){ return !isExpired(j); });
   const total = active.length;
   const todo = active.filter(function(j){ return j.status!=='応募済み'; }).length;
   // 今日・今週の応募数（応募日時ベース。週は月曜0時でリセット）
@@ -310,8 +389,8 @@ function render(){
   document.getElementById('s-today').textContent = today;
 
   let shown = visible.slice();
-  if(filterStatus==='all') shown = shown.filter(function(j){return !j.expired;});
-  if(filterStatus==='todo') shown = shown.filter(function(j){return j.status!=='応募済み' && !j.expired;});
+  if(filterStatus==='all') shown = shown.filter(function(j){return !isExpired(j);});
+  if(filterStatus==='todo') shown = shown.filter(function(j){return j.status!=='応募済み' && !isExpired(j);});
   if(filterStatus==='done') shown = shown.filter(function(j){return j.status==='応募済み';});
   if(filterStatus==='week') shown = shown.filter(function(j){return j.status==='応募済み' && j.appliedTs && j.appliedTs >= timeBounds().weekStart;});
   if(filterStatus==='today') shown = shown.filter(function(j){return j.status==='応募済み' && j.appliedTs && j.appliedTs >= timeBounds().todayStart;});
@@ -331,11 +410,11 @@ function render(){
       : '';
     const contractTag = j.contract ? '<div class="contract-tag">🤝 契約歴あり（'+esc(j.contract)+'）</div>' : '';
     card.innerHTML =
-      '<div class="card-top"><span class="platform">'+esc(j.platform)+'</span>'+badge+'</div>'+
+      '<div class="card-top"><span class="platform">'+esc(j.platform)+'</span><span style="display:flex; gap:6px; align-items:center;">'+(applied?'':prioHtml(j))+badge+'</span></div>'+
       '<div class="title">'+esc(j.title)+'</div>'+
       clientLine+contractTag+
       '<div class="meta"><span>💰 '+esc(j.reward||'応相談')+'</span><span>📅 〜'+esc(j.deadline)+'</span><span>'+esc(j.entry||'')+'</span></div>'+
-      '<div class="card-foot"><span class="genre-tag">'+esc(j.genre)+'</span><button class="hide-btn" data-row="'+j.row+'">非表示</button></div>';
+      '<div class="card-foot"><span><span class="genre-tag">'+esc(j.genre)+'</span>'+(isContinuous(j)?'<span class="cont-tag">🔁 継続あり</span>':'')+'</span><button class="hide-btn" data-row="'+j.row+'">非表示</button></div>';
     card.onclick = function(e){
       if(e.target && e.target.classList.contains('hide-btn')){
         e.stopPropagation();
@@ -634,6 +713,155 @@ const toast=document.getElementById('toast');
 function showToast(){ toast.textContent='コピーしました！'; toast.classList.add('show'); setTimeout(function(){toast.classList.remove('show');},1500); }
 function showToastMsg(msg){ toast.textContent=msg; toast.classList.add('show'); setTimeout(function(){toast.classList.remove('show');},1500); }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ============================================================
+// ③ 検索設定画面
+// ============================================================
+const settingsOverlay = document.getElementById('settings-overlay');
+let SET_MASTER = [];               // カテゴリーマスタ（GASから取得）
+let SET_CHECKED = {};              // { カテゴリーID: true }
+let SET_KWS = [];                  // [{ value, exclude }]
+let SET_COMMON_EXCLUDE = '';       // カテゴリー共通の除外キーワード
+
+function openSettings(){
+  settingsOverlay.classList.add('show');
+  document.body.classList.add('modal-open');
+  document.getElementById('settings-body').innerHTML = '<div class="loading">設定を読み込み中…</div>';
+  api('searchSettings').then(function(data){
+    if(data && data.error) throw new Error(data.error);
+    SET_MASTER = (data && data.master) || [];
+    SET_CHECKED = {}; SET_KWS = []; SET_COMMON_EXCLUDE = '';
+    ((data && data.rows) || []).forEach(function(r){
+      if(r.type==='カテゴリー'){
+        SET_CHECKED[String(r.value)] = true;
+        if(!SET_COMMON_EXCLUDE && r.exclude) SET_COMMON_EXCLUDE = r.exclude;
+        // マスタにないIDは手動追加分として一覧に加える
+        if(!SET_MASTER.some(function(m){ return String(m.id)===String(r.value); })){
+          SET_MASTER.push({ id: r.value, name: r.label || ('カテゴリーID '+r.value) });
+        }
+      } else if(r.type==='キーワード'){
+        SET_KWS.push({ value: r.value, exclude: r.exclude || '' });
+      }
+    });
+    if(SET_KWS.length===0) SET_KWS.push({ value:'', exclude:'' });
+    renderSettings();
+  }).catch(function(e){
+    document.getElementById('settings-body').innerHTML =
+      '<div class="skip-msg">設定を読み込めませんでした：'+esc(String(e.message||e))+
+      '<br><span style="font-size:12.5px;opacity:.85;">GAS側に検索設定の機能（08番ファイル＋03番の3行追加）が反映され、再デプロイされているか確認してください。</span></div>';
+  });
+}
+function closeSettings(){ settingsOverlay.classList.remove('show'); document.body.classList.remove('modal-open'); }
+settingsOverlay.onclick = function(e){ if(e.target===settingsOverlay) closeSettings(); };
+
+function renderSettings(){
+  let html = '';
+  html += '<div class="set-section"><div class="set-title">📂 カテゴリーで取得</div>';
+  html += '<div class="set-desc">チェックしたカテゴリーの新着案件を自動取得します（複数選択OK）。</div>';
+  html += '<div id="cat-list">';
+  SET_MASTER.forEach(function(m){
+    const ck = !!SET_CHECKED[String(m.id)];
+    html += '<label class="cat-item'+(ck?' checked':'')+'"><input type="checkbox" data-cid="'+esc(m.id)+'"'+(ck?' checked':'')+'> '+esc(m.name)+'</label>';
+  });
+  html += '</div>';
+  html += '<div class="set-desc" style="margin-top:10px;">一覧にないカテゴリーはIDで追加できます（クラウドワークスでカテゴリーを開き、URLの category_id= の数字）。</div>';
+  html += '<div style="display:flex; gap:6px;"><input class="set-input" id="custom-cat-id" placeholder="ID（数字）" inputmode="numeric" style="width:110px;"><input class="set-input" id="custom-cat-name" placeholder="カテゴリー名（メモ用）" style="flex:1;"><button class="kw-del" style="color:var(--green); border-color:var(--green);" onclick="addCustomCat()">追加</button></div>';
+  html += '<div class="set-desc" style="margin-top:10px;">カテゴリー共通の除外キーワード（スペース区切り）</div>';
+  html += '<input class="set-input" id="common-exclude" placeholder="例：アンケート モニター SNS" value="'+esc(SET_COMMON_EXCLUDE)+'">';
+  html += '</div>';
+
+  html += '<div class="set-section"><div class="set-title">🔍 キーワードで取得</div>';
+  html += '<div class="set-desc">スペース区切りで複数語OK。1枠＝1つの検索条件になります。</div>';
+  html += '<div id="kw-list">';
+  SET_KWS.forEach(function(k, i){
+    html += '<div class="kw-row">'
+      + '<input class="set-input" data-kwi="'+i+'" data-kf="value" placeholder="例：SEO ライティング 記事" value="'+esc(k.value)+'">'
+      + '<input class="set-input" data-kwi="'+i+'" data-kf="exclude" placeholder="除外キーワード（任意）" value="'+esc(k.exclude)+'">'
+      + '<button class="kw-del" onclick="delKw('+i+')">この枠を削除</button>'
+      + '</div>';
+  });
+  html += '</div>';
+  html += '<button class="kw-add" onclick="addKw()">＋ キーワード枠を追加</button>';
+  html += '</div>';
+
+  html += '<div class="set-save-row">'
+    + '<button class="gen-btn" style="flex:1;" onclick="saveSettings(false)">保存</button>'
+    + '<button class="gen-btn" style="flex:1.4; background:transparent; color:var(--green); border:1.5px solid var(--green);" onclick="saveSettings(true)">保存して今すぐ取得</button>'
+    + '</div>';
+  html += '<div class="set-note">・保存すると次回の自動取得（朝・昼・夕）から新しい条件で収集されます。<br>・「保存して今すぐ取得」は条件数によって30秒〜1分ほどかかります。<br>・ランサーズはメール通知経由のため、この設定の対象外です（ランサーズ側の通知メール設定で変更）。</div>';
+
+  document.getElementById('settings-body').innerHTML = html;
+
+  document.querySelectorAll('#cat-list input[type=checkbox]').forEach(function(cb){
+    cb.onchange = function(){
+      SET_CHECKED[cb.dataset.cid] = cb.checked;
+      cb.closest('.cat-item').classList.toggle('checked', cb.checked);
+    };
+  });
+  document.querySelectorAll('#kw-list .set-input').forEach(function(inp){
+    inp.oninput = function(){ SET_KWS[Number(inp.dataset.kwi)][inp.dataset.kf] = inp.value; };
+  });
+}
+
+function addCustomCat(){
+  const id = document.getElementById('custom-cat-id').value.trim();
+  const name = document.getElementById('custom-cat-name').value.trim();
+  if(!/^\d+$/.test(id)){ showToastMsg('カテゴリーIDは数字で入力してください'); return; }
+  if(!SET_MASTER.some(function(m){ return String(m.id)===id; })){
+    SET_MASTER.push({ id: Number(id), name: name || ('カテゴリーID '+id) });
+  }
+  SET_CHECKED[id] = true;
+  SET_COMMON_EXCLUDE = document.getElementById('common-exclude').value;
+  renderSettings();
+}
+function addKw(){
+  SET_COMMON_EXCLUDE = document.getElementById('common-exclude').value;
+  SET_KWS.push({ value:'', exclude:'' });
+  renderSettings();
+}
+function delKw(i){
+  SET_COMMON_EXCLUDE = document.getElementById('common-exclude').value;
+  SET_KWS.splice(i, 1);
+  if(SET_KWS.length===0) SET_KWS.push({ value:'', exclude:'' });
+  renderSettings();
+}
+
+function saveSettings(andFetch){
+  SET_COMMON_EXCLUDE = document.getElementById('common-exclude').value.trim();
+  const rows = [];
+  SET_MASTER.forEach(function(m){
+    if(SET_CHECKED[String(m.id)]){
+      rows.push({ type:'カテゴリー', value:String(m.id), label:m.name, exclude:SET_COMMON_EXCLUDE });
+    }
+  });
+  SET_KWS.forEach(function(k){
+    const v = String(k.value||'').trim();
+    if(v) rows.push({ type:'キーワード', value:v, label:v.slice(0,30), exclude:String(k.exclude||'').trim() });
+  });
+  if(rows.length===0){ showToastMsg('カテゴリーかキーワードを最低1つ設定してください'); return; }
+
+  document.getElementById('settings-body').innerHTML =
+    '<div class="loading">'+(andFetch?'保存して案件を取得中…（30秒〜1分ほどかかります）':'保存中…')+'</div>'
+    + '<div class="typing-box"><span></span><span></span><span></span></div>';
+
+  api('saveSearchSettings', { rows: rows }).then(function(res){
+    if(res && res.error) throw new Error(res.error);
+    if(!andFetch){
+      showToastMsg('検索設定を保存しました');
+      closeSettings();
+      return;
+    }
+    return api('runFetch').then(function(fr){
+      if(fr && fr.error) throw new Error(fr.error);
+      showToastMsg('取得完了：新規 '+((fr&&fr.added)!=null?fr.added:'?')+'件');
+      closeSettings();
+      loadJobs();
+    });
+  }).catch(function(e){
+    document.getElementById('settings-body').innerHTML =
+      '<div class="skip-msg">エラー：'+esc(String(e.message||e))+'</div>';
+  });
+}
 
 loadJobs();
 </script>
