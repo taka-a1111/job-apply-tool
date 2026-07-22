@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<!-- BUILD_TAG: 2026-07-22d -->
+<!-- BUILD_TAG: 2026-07-22e -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
@@ -214,12 +214,12 @@
     </div>
   </div>
 
-  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-07-22d</div>
+  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-07-22e</div>
 
   <div class="toast" id="toast">コピーしました！</div>
 
 <script>
-console.log('BUILD_TAG: 2026-07-22d');
+console.log('BUILD_TAG: 2026-07-22e');
 
 // ---------- ③ ロゴ／Castのタップで更新 ----------
 document.getElementById('brand').onclick = loadJobs;
@@ -396,6 +396,11 @@ function render(){
   if(filterStatus==='week') shown = shown.filter(function(j){return j.status==='応募済み' && j.appliedTs && j.appliedTs >= timeBounds().weekStart;});
   if(filterStatus==='today') shown = shown.filter(function(j){return j.status==='応募済み' && j.appliedTs && j.appliedTs >= timeBounds().todayStart;});
   if(filterGenre) shown = shown.filter(function(j){return j.genre===filterGenre;});
+
+  // 優先度スコアの高い順に並べ替え（同点は新着順のまま）。応募済み系の一覧は従来どおり
+  if(filterStatus==='all' || filterStatus==='todo'){
+    shown.sort(function(a,b){ return scoreJob(b) - scoreJob(a); });
+  }
 
   const list = document.getElementById('list');
   if(shown.length===0){ list.innerHTML='<div class="empty">該当する案件はありません</div>'; return; }
