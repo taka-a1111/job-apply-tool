@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<!-- BUILD_TAG: 2026-07-23a -->
+<!-- BUILD_TAG: 2026-07-23b -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
@@ -214,12 +214,12 @@
     </div>
   </div>
 
-  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-07-23a</div>
+  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-07-23b</div>
 
   <div class="toast" id="toast">コピーしました！</div>
 
 <script>
-console.log('BUILD_TAG: 2026-07-23a');
+console.log('BUILD_TAG: 2026-07-23b');
 
 // ---------- ③ ロゴ／Castのタップで更新 ----------
 document.getElementById('brand').onclick = loadJobs;
@@ -728,6 +728,8 @@ let SET_MASTER = [];               // カテゴリーマスタ（GASから取得
 let SET_CHECKED = {};              // { カテゴリーID: true }
 let SET_KWS = [];                  // [{ value, exclude }]
 let SET_COMMON_EXCLUDE = '';       // カテゴリー共通の除外キーワード
+let SET_MIN_REWARD = '';           // 最低報酬額（円・空なら無効）
+let SET_EX_NEGO = false;           // 応相談（金額記載なし）も除外
 
 function openSettings(){
   settingsOverlay.classList.add('show');
@@ -737,6 +739,7 @@ function openSettings(){
     if(data && data.error) throw new Error(data.error);
     SET_MASTER = (data && data.master) || [];
     SET_CHECKED = {}; SET_KWS = []; SET_COMMON_EXCLUDE = '';
+    SET_MIN_REWARD = ''; SET_EX_NEGO = false;
     ((data && data.rows) || []).forEach(function(r){
       if(r.type==='カテゴリー'){
         SET_CHECKED[String(r.value)] = true;
@@ -747,6 +750,11 @@ function openSettings(){
         }
       } else if(r.type==='キーワード'){
         SET_KWS.push({ value: r.value, exclude: r.exclude || '' });
+      } else if(r.type==='最低報酬額'){
+        const n = parseInt(String(r.value).replace(/[^\d]/g,''),10)||0;
+        SET_MIN_REWARD = n>0 ? String(n) : '';
+      } else if(r.type==='応相談も除外'){
+        SET_EX_NEGO = (r.value==='する');
       }
     });
     if(SET_KWS.length===0) SET_KWS.push({ value:'', exclude:'' });
@@ -790,6 +798,12 @@ function renderSettings(){
   html += '<button class="kw-add" onclick="addKw()">＋ キーワード枠を追加</button>';
   html += '</div>';
 
+  html += '<div class="set-section"><div class="set-title">💰 単価で絞り込み</div>';
+  html += '<div class="set-desc">報酬の上限額がこの金額に届かない案件を取得時に除外します（空欄で無効）。幅がある報酬（例：10,000〜30,000円）は上限額で判定するため、可能性のある案件は残ります。時給案件は対象外です。</div>';
+  html += '<input class="set-input" id="min-reward" placeholder="例：10000" inputmode="numeric" value="'+esc(SET_MIN_REWARD)+'">';
+  html += '<label class="cat-item" style="margin-top:8px;'+(SET_EX_NEGO?'':'')+'"><input type="checkbox" id="ex-nego"'+(SET_EX_NEGO?' checked':'')+'> 金額の記載がない案件（応相談）も除外する</label>';
+  html += '</div>';
+
   html += '<div class="set-save-row">'
     + '<button class="gen-btn" style="flex:1;" onclick="saveSettings(false)">保存</button>'
     + '<button class="gen-btn" style="flex:1.4; background:transparent; color:var(--green); border:1.5px solid var(--green);" onclick="saveSettings(true)">保存して今すぐ取得</button>'
@@ -809,6 +823,16 @@ function renderSettings(){
   });
 }
 
+// 再描画前に入力中の値を退避（描画で消えないように）
+function syncSettingInputs(){
+  const ce = document.getElementById('common-exclude');
+  if(ce) SET_COMMON_EXCLUDE = ce.value;
+  const mr = document.getElementById('min-reward');
+  if(mr) SET_MIN_REWARD = mr.value.replace(/[^\d]/g,'');
+  const en = document.getElementById('ex-nego');
+  if(en) SET_EX_NEGO = en.checked;
+}
+
 function addCustomCat(){
   const id = document.getElementById('custom-cat-id').value.trim();
   const name = document.getElementById('custom-cat-name').value.trim();
@@ -817,16 +841,16 @@ function addCustomCat(){
     SET_MASTER.push({ id: Number(id), name: name || ('カテゴリーID '+id) });
   }
   SET_CHECKED[id] = true;
-  SET_COMMON_EXCLUDE = document.getElementById('common-exclude').value;
+  syncSettingInputs();
   renderSettings();
 }
 function addKw(){
-  SET_COMMON_EXCLUDE = document.getElementById('common-exclude').value;
+  syncSettingInputs();
   SET_KWS.push({ value:'', exclude:'' });
   renderSettings();
 }
 function delKw(i){
-  SET_COMMON_EXCLUDE = document.getElementById('common-exclude').value;
+  syncSettingInputs();
   SET_KWS.splice(i, 1);
   if(SET_KWS.length===0) SET_KWS.push({ value:'', exclude:'' });
   renderSettings();
@@ -834,6 +858,8 @@ function delKw(i){
 
 function saveSettings(andFetch){
   SET_COMMON_EXCLUDE = document.getElementById('common-exclude').value.trim();
+  SET_MIN_REWARD = document.getElementById('min-reward').value.replace(/[^\d]/g,'');
+  SET_EX_NEGO = document.getElementById('ex-nego').checked;
   const rows = [];
   SET_MASTER.forEach(function(m){
     if(SET_CHECKED[String(m.id)]){
@@ -845,6 +871,11 @@ function saveSettings(andFetch){
     if(v) rows.push({ type:'キーワード', value:v, label:v.slice(0,30), exclude:String(k.exclude||'').trim() });
   });
   if(rows.length===0){ showToastMsg('カテゴリーかキーワードを最低1つ設定してください'); return; }
+  // 検索条件の後ろに設定行を付ける（03のAPI変更なしで保存できる方式）
+  if(SET_MIN_REWARD && Number(SET_MIN_REWARD)>0){
+    rows.push({ type:'最低報酬額', value:SET_MIN_REWARD, label:'この額未満の案件を取得時に除外', exclude:'' });
+    rows.push({ type:'応相談も除外', value:(SET_EX_NEGO?'する':'しない'), label:'', exclude:'' });
+  }
 
   document.getElementById('settings-body').innerHTML =
     '<div class="loading">'+(andFetch?'保存して案件を取得中…（30秒〜1分ほどかかります）':'保存中…')+'</div>'
