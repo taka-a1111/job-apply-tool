@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<!-- BUILD_TAG: 2026-07-23b -->
+<!-- BUILD_TAG: 2026-08-01a -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
@@ -214,12 +214,12 @@
     </div>
   </div>
 
-  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-07-23b</div>
+  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-08-01a</div>
 
   <div class="toast" id="toast">コピーしました！</div>
 
 <script>
-console.log('BUILD_TAG: 2026-07-23b');
+console.log('BUILD_TAG: 2026-08-01a');
 
 // ---------- ③ ロゴ／Castのタップで更新 ----------
 document.getElementById('brand').onclick = loadJobs;
@@ -260,17 +260,29 @@ const CONFIG = {
 // ============================================================
 // GAS API 通信
 // ============================================================
-async function api(action, extra){
+async function api(action, extra, timeoutMs){
   const payload = Object.assign({ token: CONFIG.TOKEN, action: action }, extra || {});
-  const res = await fetch(CONFIG.GAS_URL, {
+  const opts = {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify(payload)
-  });
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  const data = await res.json();
-  if (data && data.error === 'unauthorized') throw new Error('認証エラー：TOKENがGAS側のAPI_TOKENと一致していません');
-  return data;
+  };
+  // タイムアウト指定がある場合のみ中断制御（生成系は長時間かかるため未指定＝無制限）
+  let timer = null;
+  if(timeoutMs){
+    const ctrl = new AbortController();
+    opts.signal = ctrl.signal;
+    timer = setTimeout(function(){ ctrl.abort(); }, timeoutMs);
+  }
+  try {
+    const res = await fetch(CONFIG.GAS_URL, opts);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (data && data.error === 'unauthorized') throw new Error('認証エラー：TOKENがGAS側のAPI_TOKENと一致していません');
+    return data;
+  } finally {
+    if(timer) clearTimeout(timer);
+  }
 }
 
 function configOk(){
@@ -504,8 +516,8 @@ function openSheet(job){
 
   if(lancers) return; // ランサーズは自動取得しない
 
-  // 非同期で全文＋クライアント名を取得して表示を差し替え
-  api('detail', { url: job.url }).then(function(detail){
+  // 非同期で全文＋クライアント名を取得して表示を差し替え（30秒でタイムアウト）
+  api('detail', { url: job.url }, 30000).then(function(detail){
     if(!detail) return;
     if(detail.contract && !document.getElementById('contract-warn')){
       currentJob.contract = detail.contract;
@@ -535,6 +547,11 @@ function openSheet(job){
       cl.innerHTML = '👤 ' + esc(job.clientName) + (job.certified ? ' <span class="cert-mark">認定</span>' : '');
     } else if(cl){
       cl.textContent = '👤 クライアント名：取得失敗';
+    }
+    // 「読み込み中…」のまま止まらないよう、必ず概要にフォールバック
+    const fb = document.getElementById('full-body');
+    if(fb){
+      fb.textContent = (job.summary || '（概要なし）') + '\n\n（全文の読み込みに失敗しました。シートを閉じて開き直すと再取得します）';
     }
   });
 }
