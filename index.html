@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<!-- BUILD_TAG: 2026-08-01a -->
+<!-- BUILD_TAG: 2026-08-01b -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
@@ -214,12 +214,12 @@
     </div>
   </div>
 
-  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-08-01a</div>
+  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-08-01b</div>
 
   <div class="toast" id="toast">コピーしました！</div>
 
 <script>
-console.log('BUILD_TAG: 2026-08-01a');
+console.log('BUILD_TAG: 2026-08-01b');
 
 // ---------- ③ ロゴ／Castのタップで更新 ----------
 document.getElementById('brand').onclick = loadJobs;
@@ -517,7 +517,7 @@ function openSheet(job){
   if(lancers) return; // ランサーズは自動取得しない
 
   // 非同期で全文＋クライアント名を取得して表示を差し替え（30秒でタイムアウト）
-  api('detail', { url: job.url }, 30000).then(function(detail){
+  api('detail', { url: job.url, row: job.row }, 30000).then(function(detail){
     if(!detail) return;
     if(detail.contract && !document.getElementById('contract-warn')){
       currentJob.contract = detail.contract;
