@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<!-- BUILD_TAG: 2026-08-01b -->
+<!-- BUILD_TAG: 2026-08-01c -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
@@ -39,6 +39,11 @@
   .filters { display:flex; gap:6px; padding:10px 14px; background:var(--card); border-bottom:1px solid var(--border); overflow-x:auto; }
   .fbtn { white-space:nowrap; font-size:14px; padding:9px 14px; border-radius:8px; border:1px solid var(--border); background:#15181d; color:#c9d1d9; cursor:pointer; }
   .fbtn:active { background:#22262c; }
+
+  .sortbar { display:flex; align-items:center; gap:8px; padding:8px 14px; background:var(--card); border-bottom:1px solid var(--border); }
+  .sort-label { font-size:12px; color:var(--muted); flex-shrink:0; }
+  .sbtn { font-size:13px; padding:7px 13px; border-radius:8px; border:1px solid var(--border); background:#15181d; color:#c9d1d9; cursor:pointer; white-space:nowrap; }
+  .sbtn.active { background:var(--green); border-color:var(--green); color:#04310f; font-weight:600; }
   .fbtn.active { background:var(--green); border-color:var(--green); color:#04310f; font-weight:600; }
 
   .list { padding:12px 14px; display:flex; flex-direction:column; gap:10px; }
@@ -173,6 +178,12 @@
   </div>
   </div>
 
+  <div class="sortbar">
+    <span class="sort-label">並び順</span>
+    <button class="sbtn active" data-sort="prio">🔥 重要度順</button>
+    <button class="sbtn" data-sort="new">🕐 新着順</button>
+  </div>
+
   <div class="list" id="list"><div class="loading">案件を読み込み中…</div></div>
 
   <div class="overlay" id="overlay">
@@ -214,12 +225,12 @@
     </div>
   </div>
 
-  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-08-01b</div>
+  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-08-01c</div>
 
   <div class="toast" id="toast">コピーしました！</div>
 
 <script>
-console.log('BUILD_TAG: 2026-08-01b');
+console.log('BUILD_TAG: 2026-08-01c');
 
 // ---------- ③ ロゴ／Castのタップで更新 ----------
 document.getElementById('brand').onclick = loadJobs;
@@ -295,6 +306,16 @@ function configOk(){
 let JOBS = [];
 let filterStatus = 'todo';
 let filterGenre = null;
+let sortMode = 'prio'; // 'prio'=重要度順 / 'new'=新着順
+
+document.querySelectorAll('.sbtn').forEach(function(btn){
+  btn.onclick = function(){
+    document.querySelectorAll('.sbtn').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+    sortMode = btn.dataset.sort;
+    render();
+  };
+});
 
 function loadJobs(){
   if(!configOk()){
@@ -409,8 +430,8 @@ function render(){
   if(filterStatus==='today') shown = shown.filter(function(j){return j.status==='応募済み' && j.appliedTs && j.appliedTs >= timeBounds().todayStart;});
   if(filterGenre) shown = shown.filter(function(j){return j.genre===filterGenre;});
 
-  // 優先度スコアの高い順に並べ替え（同点は新着順のまま）。応募済み系の一覧は従来どおり
-  if(filterStatus==='all' || filterStatus==='todo'){
+  // 並び替え：重要度順（同点は新着順を維持）／新着順（取得の新しい順のまま）
+  if((filterStatus==='all' || filterStatus==='todo') && sortMode==='prio'){
     shown.sort(function(a,b){ return scoreJob(b) - scoreJob(a); });
   }
 
