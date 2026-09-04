@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<!-- BUILD_TAG: 2026-08-31a -->
+<!-- BUILD_TAG: 2026-09-04a -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
@@ -225,12 +225,12 @@
     </div>
   </div>
 
-  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-08-31a</div>
+  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-09-04a</div>
 
   <div class="toast" id="toast">コピーしました！</div>
 
 <script>
-console.log('BUILD_TAG: 2026-08-31a');
+console.log('BUILD_TAG: 2026-09-04a');
 
 // ---------- ③ ロゴ／Castのタップで更新 ----------
 document.getElementById('brand').onclick = loadJobs;
@@ -296,6 +296,41 @@ document.addEventListener('visibilitychange', function(){
     location.reload();
   }
 });
+
+// ============================================================
+// 開いている詳細シートを記録（PWAでページが破棄されたときの復元用）
+// スマホでアプリを切り替えて放置するとページ自体が破棄され、
+// 戻ったときにトップ画面から始まってしまう。開いていた案件を
+// sessionStorage に持っておき、再読み込み後に同じシートを開き直す。
+// ============================================================
+let openRow = null;
+function setOpenRow(row){
+  openRow = row;
+  try{ sessionStorage.setItem('cast_open_row', String(row)); }catch(e){}
+}
+function clearOpenRow(){
+  openRow = null;
+  try{ sessionStorage.removeItem('cast_open_row'); }catch(e){}
+}
+function getOpenRow(){
+  if(openRow) return openRow;
+  try{
+    const v = sessionStorage.getItem('cast_open_row');
+    return v ? parseInt(v,10) : null;
+  }catch(e){ return null; }
+}
+// 再読み込み後、開いていたシートを開き直す
+// 生成中だった場合は restorePending 側が開くので、ここでは何もしない
+function restoreOpenSheet(){
+  if(getPending()) return;
+  const row = getOpenRow();
+  if(!row) return;
+  const ov = document.getElementById('overlay');
+  if(ov && ov.classList.contains('show')) return;
+  const job = JOBS.find(function(j){ return j.row === row; });
+  if(!job){ clearOpenRow(); return; }
+  openSheet(job);
+}
 
 // ============================================================
 // GAS API 通信
@@ -375,12 +410,14 @@ function loadJobs(){
     render();
     if(hadCache) showToastMsg('最新に更新しました');
     restorePending();   // 生成中だった案件があれば結果を復元
+    restoreOpenSheet(); // 開いていた詳細シートがあれば開き直す
   }).catch(function(e){
     if(!hadCache){
       document.getElementById('list').innerHTML = '<div class="empty">読み込みエラー：'+esc(String(e.message||e))+'</div>';
     }else{
       showToastMsg('更新に失敗（前回のデータを表示中）');
       restorePending();
+      restoreOpenSheet();
     }
   });
 }
@@ -575,6 +612,7 @@ function isLancers(job){ return String(job.platform||'').indexOf('ランサー�
 
 function openSheet(job){
   currentJob = job;
+  setOpenRow(job.row);
   document.getElementById('sheet-title').textContent = job.title;
   const lancers = isLancers(job);
   // 初期表示：概要＋ローディング表示。詳細は非同期で差し替え
@@ -796,7 +834,7 @@ function failHandler(e){
   document.getElementById('sheet-body').innerHTML += '<div class="skip-msg">通信エラー：'+esc(String(e.message||e))+'</div>';
 }
 
-function closeSheet(){ overlay.classList.remove('show'); document.body.classList.remove('modal-open'); }
+function closeSheet(){ clearOpenRow(); overlay.classList.remove('show'); document.body.classList.remove('modal-open'); }
 overlay.onclick=function(e){ if(e.target===overlay) closeSheet(); };
 
 // 非表示メニュー
