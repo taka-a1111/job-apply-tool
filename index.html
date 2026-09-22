@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<!-- BUILD_TAG: 2026-09-22d -->
+<!-- BUILD_TAG: 2026-09-22e -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
@@ -225,12 +225,12 @@
     </div>
   </div>
 
-  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-09-22d</div>
+  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-09-22e</div>
 
   <div class="toast" id="toast">コピーしました！</div>
 
 <script>
-console.log('BUILD_TAG: 2026-09-22d');
+console.log('BUILD_TAG: 2026-09-22e');
 
 // ---------- ③ ロゴ／Castのタップで更新 ----------
 document.getElementById('brand').onclick = loadJobs;
@@ -300,11 +300,32 @@ function getPending(){
     return parseInt(o.row,10) || null;
   }catch(e){ return null; }
 }
-// 画面に戻ったとき、生成中だった案件があればリロードして復旧
+// build 2026-09-22e：再読み込みの共通ガード。60秒に1回まで
+function safeReload(reason){
+  let last = 0;
+  try { last = Number(sessionStorage.getItem('cast_reload_at') || 0); } catch(e){}
+  if(Date.now() - last < 60000) return false;
+  try { sessionStorage.setItem('cast_reload_at', String(Date.now())); } catch(e){}
+  location.reload();
+  return true;
+}
+
+// 画面に戻ったとき、生成中だった案件があれば「通信が生きているか」を先に確かめる。
+// 以前は無条件に再読み込みしていたが、スマホではキーボードや通知の表示でも
+// このイベントが発火し、生成ボタンを押した直後にシートごと消える原因になっていた。
+// 通信が生きていれば何もしない（進行中の生成はそのまま完了する）。
+// 通信が切れている（Failed to fetch）ときだけ再読み込みして復旧する。
+let visibilityChecking = false;
 document.addEventListener('visibilitychange', function(){
-  if(document.visibilityState === 'visible' && getPending()){
-    location.reload();
-  }
+  if(document.visibilityState !== 'visible' || !getPending() || visibilityChecking) return;
+  visibilityChecking = true;
+  api('usage', {}, 8000).then(function(){
+    visibilityChecking = false;   // 通信は生きている。生成の完了を待つ
+  }).catch(function(err){
+    visibilityChecking = false;
+    const isNetworkError = err && (err.name === 'TypeError' || /Failed to fetch|NetworkError|Load failed/i.test(String(err.message||err)));
+    if(isNetworkError) safeReload('visibility');
+  });
 });
 
 // ============================================================
@@ -800,14 +821,12 @@ function openSheet(job){
     // 通信エラーなら1回だけ自動で再読み込みし、restoreOpenSheet で同じ案件を開き直す。
     // 60秒以内に再読み込みした直後はループを避けて再読み込みしない。
     const isNetworkError = err && (err.name === 'TypeError' || /Failed to fetch|NetworkError|Load failed/i.test(String(err.message||err)));
-    let lastReload = 0;
-    try { lastReload = Number(sessionStorage.getItem('cast_reload_at') || 0); } catch(e){}
-    if(isNetworkError && Date.now() - lastReload > 60000){
-      try { sessionStorage.setItem('cast_reload_at', String(Date.now())); } catch(e){}
+    // 生成中（応募文作成を押した後）は絶対に再読み込みしない。生成の完了を優先する
+    if(isNetworkError && !getPending() && currentJob && currentJob.row === job.row){
       const fb0 = document.getElementById('full-body');
       if(fb0) fb0.textContent = (job.summary || '') + '\n\n（通信が切れたため再読み込みします…）';
       setOpenRow(job.row);
-      setTimeout(function(){ location.reload(); }, 600);
+      setTimeout(function(){ if(!getPending()) safeReload('detail'); }, 600);
       return;
     }
     const cl = document.getElementById('client-line');
@@ -967,12 +986,14 @@ function autoCopy(text){
 }
 function failHandler(e){
   // 通信が切れてもサーバー側は完走している可能性が高い。
-  // リロードしてセッションを張り直し、保存済みの結果を復元する。
-  if(getPending()){
-    location.reload();
-    return;
+  // 通信エラーのときだけ再読み込みしてセッションを張り直し、保存済みの結果を復元する。
+  const isNetworkError = e && (e.name === 'TypeError' || /Failed to fetch|NetworkError|Load failed/i.test(String(e.message||e)));
+  if(getPending() && isNetworkError){
+    if(safeReload('generate')) return;
   }
-  document.getElementById('sheet-body').innerHTML += '<div class="skip-msg">通信エラー：'+esc(String(e.message||e))+'</div>';
+  clearPending();
+  document.getElementById('sheet-body').innerHTML += '<div class="skip-msg">エラー：'+esc(String(e.message||e))+'<br>「応募文作成」をもう一度押してください。</div>';
+  bindSheetButtons();
 }
 
 function closeSheet(){ clearOpenRow(); overlay.classList.remove('show'); document.body.classList.remove('modal-open'); }
