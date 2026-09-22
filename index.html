@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<!-- BUILD_TAG: 2026-09-22b -->
+<!-- BUILD_TAG: 2026-09-22c -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
@@ -225,12 +225,12 @@
     </div>
   </div>
 
-  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-09-22b</div>
+  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-09-22c</div>
 
   <div class="toast" id="toast">コピーしました！</div>
 
 <script>
-console.log('BUILD_TAG: 2026-09-22b');
+console.log('BUILD_TAG: 2026-09-22c');
 
 // ---------- ③ ロゴ／Castのタップで更新 ----------
 document.getElementById('brand').onclick = loadJobs;
@@ -758,7 +758,22 @@ function openSheet(job){
     } else if(fb && !detail.body){
       fb.textContent = (job.summary || '') + '\n\n（全文は取得できなかったため概要を表示しています）';
     }
-  }).catch(function(){
+  }).catch(function(err){
+    // build 2026-09-22c：別アプリから戻った後は GAS への通信が「Failed to fetch」で
+    // 失敗し続け、リトライでは直らない（ページを再読み込みするまで復旧しない）。
+    // 通信エラーなら1回だけ自動で再読み込みし、restoreOpenSheet で同じ案件を開き直す。
+    // 60秒以内に再読み込みした直後はループを避けて再読み込みしない。
+    const isNetworkError = err && (err.name === 'TypeError' || /Failed to fetch|NetworkError|Load failed/i.test(String(err.message||err)));
+    let lastReload = 0;
+    try { lastReload = Number(sessionStorage.getItem('cast_reload_at') || 0); } catch(e){}
+    if(isNetworkError && Date.now() - lastReload > 60000){
+      try { sessionStorage.setItem('cast_reload_at', String(Date.now())); } catch(e){}
+      const fb0 = document.getElementById('full-body');
+      if(fb0) fb0.textContent = (job.summary || '') + '\n\n（通信が切れたため再読み込みします…）';
+      setOpenRow(job.row);
+      setTimeout(function(){ location.reload(); }, 600);
+      return;
+    }
     const cl = document.getElementById('client-line');
     if(cl && job.clientName){
       cl.innerHTML = '👤 ' + esc(job.clientName) + (job.certified ? ' <span class="cert-mark">認定</span>' : '');
@@ -768,7 +783,7 @@ function openSheet(job){
     // 「読み込み中…」のまま止まらないよう、必ず概要にフォールバック
     const fb = document.getElementById('full-body');
     if(fb){
-      fb.textContent = (job.summary || '（概要なし）') + '\n\n（全文の読み込みに3回失敗しました。通信状態を確認して、シートを閉じて開き直してください）';
+      fb.textContent = (job.summary || '（概要なし）') + '\n\n（全文の読み込みに失敗しました。再読み込みしても直らない場合は、しばらくしてから開き直してください）';
     }
   });
 }
