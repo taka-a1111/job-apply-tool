@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<!-- BUILD_TAG: 2026-09-22c -->
+<!-- BUILD_TAG: 2026-09-22d -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
@@ -225,12 +225,12 @@
     </div>
   </div>
 
-  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-09-22c</div>
+  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-09-22d</div>
 
   <div class="toast" id="toast">コピーしました！</div>
 
 <script>
-console.log('BUILD_TAG: 2026-09-22c');
+console.log('BUILD_TAG: 2026-09-22d');
 
 // ---------- ③ ロゴ／Castのタップで更新 ----------
 document.getElementById('brand').onclick = loadJobs;
@@ -274,20 +274,30 @@ const CONFIG = {
 // サーバー側の生成はシートに保存されて完走している。
 // 戻ってきたらリロードしてセッションを張り直し、保存済みの結果を回収する。
 // ============================================================
+// build 2026-09-22d：保存先を sessionStorage から localStorage に変更。
+// sessionStorage はアプリが強制終了（メモリ不足・スワイプ終了）されると消えるため、
+// 復帰時に「生成中だった案件」が分からずシートを開き直せなかった。
+// localStorage は端末に残るので、アプリを立ち上げ直しても復元できる。
+// 古い記録を延々と復元しないよう、2時間で失効させる。
+const PENDING_TTL = 2*60*60*1000;
 let pendingRow = null;
 function setPending(row){
   pendingRow = row;
-  try{ sessionStorage.setItem('cast_pending', String(row)); }catch(e){}
+  try{ localStorage.setItem('cast_pending', JSON.stringify({ row: row, t: Date.now() })); }catch(e){}
 }
 function clearPending(){
   pendingRow = null;
-  try{ sessionStorage.removeItem('cast_pending'); }catch(e){}
+  try{ localStorage.removeItem('cast_pending'); }catch(e){}
 }
 function getPending(){
   if(pendingRow) return pendingRow;
   try{
-    const v = sessionStorage.getItem('cast_pending');
-    return v ? parseInt(v,10) : null;
+    const raw = localStorage.getItem('cast_pending');
+    if(!raw) return null;
+    const o = JSON.parse(raw);
+    if(!o || !o.row) return null;
+    if(Date.now() - (o.t||0) > PENDING_TTL){ localStorage.removeItem('cast_pending'); return null; }
+    return parseInt(o.row,10) || null;
   }catch(e){ return null; }
 }
 // 画面に戻ったとき、生成中だった案件があればリロードして復旧
@@ -303,21 +313,45 @@ document.addEventListener('visibilitychange', function(){
 // 戻ったときにトップ画面から始まってしまう。開いていた案件を
 // sessionStorage に持っておき、再読み込み後に同じシートを開き直す。
 // ============================================================
+const OPENROW_TTL = 24*60*60*1000;
 let openRow = null;
 function setOpenRow(row){
   openRow = row;
-  try{ sessionStorage.setItem('cast_open_row', String(row)); }catch(e){}
+  try{ localStorage.setItem('cast_open_row', JSON.stringify({ row: row, t: Date.now() })); }catch(e){}
 }
 function clearOpenRow(){
   openRow = null;
-  try{ sessionStorage.removeItem('cast_open_row'); }catch(e){}
+  try{ localStorage.removeItem('cast_open_row'); }catch(e){}
 }
 function getOpenRow(){
   if(openRow) return openRow;
   try{
-    const v = sessionStorage.getItem('cast_open_row');
-    return v ? parseInt(v,10) : null;
+    const raw = localStorage.getItem('cast_open_row');
+    if(!raw) return null;
+    const o = JSON.parse(raw);
+    if(!o || !o.row) return null;
+    if(Date.now() - (o.t||0) > OPENROW_TTL){ localStorage.removeItem('cast_open_row'); return null; }
+    return parseInt(o.row,10) || null;
   }catch(e){ return null; }
+}
+
+// ============================================================
+// 復帰後のコピー（build 2026-09-22d）
+// 再読み込み直後はブラウザの制限で自動コピーが拒否される（ユーザー操作が必要）。
+// 復元した応募文を控えておき、画面への最初のタップでコピーする。
+// ============================================================
+let copyOnNextTap = null;
+function armCopyOnNextTap(text){
+  if(!text || text.indexOf('【応募不可】') === 0) return;
+  copyOnNextTap = text;
+  showToastMsg('画面をタップすると応募文をコピーします');
+  const handler = function(){
+    if(!copyOnNextTap) return;
+    const t = copyOnNextTap; copyOnNextTap = null;
+    document.removeEventListener('pointerdown', handler, true);
+    copyText(t);
+  };
+  document.addEventListener('pointerdown', handler, true);
 }
 // 再読み込み後、開いていたシートを開き直す
 // 生成中だった場合は restorePending 側が開くので、ここでは何もしない
@@ -494,7 +528,8 @@ function restorePending(){
 
   if(job.body){
     openSheet(job);
-    showToastMsg('応募文を復元しました');
+    setOpenRow(job.row);
+    armCopyOnNextTap(job.body);
     return;
   }
 
@@ -511,7 +546,8 @@ function restorePending(){
         currentJob = job;
         saveLocalJobs();
         handleResult({ body: saved.body, status: saved.status, note: '' });
-        showToastMsg('応募文を復元しました');
+        setOpenRow(job.row);
+        armCopyOnNextTap(saved.body);
       } else if(tries < 10){
         setTimeout(poll, 5000);
       } else {
@@ -920,7 +956,11 @@ function autoCopy(text){
   if(navigator.clipboard && navigator.clipboard.writeText){
     navigator.clipboard.writeText(text).then(function(){
       showToastMsg('応募文をコピーしました');
-    }).catch(legacy);
+    }).catch(function(){
+      legacy();
+      // 旧方式も拒否された場合（ユーザー操作なしの復帰直後など）は最初のタップでコピー
+      armCopyOnNextTap(text);
+    });
   } else {
     legacy();
   }
