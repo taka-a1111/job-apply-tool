@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<!-- BUILD_TAG: 2026-09-04a -->
+<!-- BUILD_TAG: 2026-09-22a -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
@@ -225,12 +225,12 @@
     </div>
   </div>
 
-  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-09-04a</div>
+  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-09-22a</div>
 
   <div class="toast" id="toast">コピーしました！</div>
 
 <script>
-console.log('BUILD_TAG: 2026-09-04a');
+console.log('BUILD_TAG: 2026-09-22a');
 
 // ---------- ③ ロゴ／Castのタップで更新 ----------
 document.getElementById('brand').onclick = loadJobs;
@@ -358,6 +358,18 @@ async function api(action, extra, timeoutMs){
   } finally {
     if(timer) clearTimeout(timer);
   }
+}
+
+// 一時的な失敗（デプロイ切り替え・セッション切れ・瞬断）に備え、2秒おきに最大3回まで試す
+// build 2026-09-22a
+function apiRetry(action, extra, timeoutMs, tries){
+  tries = tries || 3;
+  return api(action, extra, timeoutMs).catch(function(e){
+    if(tries <= 1) throw e;
+    return new Promise(function(r){ setTimeout(r, 2000); }).then(function(){
+      return apiRetry(action, extra, timeoutMs, tries - 1);
+    });
+  });
 }
 
 function configOk(){
@@ -648,8 +660,13 @@ function openSheet(job){
   if(lancers) return; // ランサーズは自動取得しない
 
   // 非同期で全文＋クライアント名を取得して表示を差し替え（30秒でタイムアウト）
-  api('detail', { url: job.url, row: job.row }, 30000).then(function(detail){
+  apiRetry('detail', { url: job.url, row: job.row }, 30000).then(function(detail){
     if(!detail) return;
+    // サーバー側の実地確認で募集終了と分かった場合は明示する
+    if(detail.closed && !document.getElementById('closed-warn')){
+      const sb = document.getElementById('sheet-body');
+      if(sb) sb.insertAdjacentHTML('afterbegin', '<div id="closed-warn" class="skip-msg">⚠️ この案件は募集が終了しています。一覧を更新すると表示されなくなります。</div>');
+    }
     if(detail.contract && !document.getElementById('contract-warn')){
       currentJob.contract = detail.contract;
       currentJob.contractMemo = detail.contractMemo || '';
@@ -682,7 +699,7 @@ function openSheet(job){
     // 「読み込み中…」のまま止まらないよう、必ず概要にフォールバック
     const fb = document.getElementById('full-body');
     if(fb){
-      fb.textContent = (job.summary || '（概要なし）') + '\n\n（全文の読み込みに失敗しました。シートを閉じて開き直すと再取得します）';
+      fb.textContent = (job.summary || '（概要なし）') + '\n\n（全文の読み込みに3回失敗しました。通信状態を確認して、シートを閉じて開き直してください）';
     }
   });
 }
