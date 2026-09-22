@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<!-- BUILD_TAG: 2026-09-22a -->
+<!-- BUILD_TAG: 2026-09-22b -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
@@ -225,12 +225,12 @@
     </div>
   </div>
 
-  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-09-22a</div>
+  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-09-22b</div>
 
   <div class="toast" id="toast">コピーしました！</div>
 
 <script>
-console.log('BUILD_TAG: 2026-09-22a');
+console.log('BUILD_TAG: 2026-09-22b');
 
 // ---------- ③ ロゴ／Castのタップで更新 ----------
 document.getElementById('brand').onclick = loadJobs;
@@ -369,6 +369,56 @@ function apiRetry(action, extra, timeoutMs, tries){
     return new Promise(function(r){ setTimeout(r, 2000); }).then(function(){
       return apiRetry(action, extra, timeoutMs, tries - 1);
     });
+  });
+}
+
+// ============================================================
+// 募集全文の先読みキャッシュ（build 2026-09-22b）
+// GAS の応答は最短でも1.7秒かかるため、一覧を表示した時点で上から数件の全文を
+// 裏で取得してメモリと sessionStorage に持っておく。開いた瞬間に表示できる。
+// ============================================================
+const DETAIL_CACHE_KEY = 'cast_detail_cache';
+const PREFETCH_COUNT = 8;
+let detailCache = {};
+try { detailCache = JSON.parse(sessionStorage.getItem(DETAIL_CACHE_KEY) || '{}') || {}; } catch(e){ detailCache = {}; }
+let prefetchQueue = [];
+let prefetching = false;
+
+function saveDetailCache(){
+  try {
+    const keys = Object.keys(detailCache);
+    if(keys.length > 30){
+      keys.sort(function(a,b){ return (detailCache[a].t||0) - (detailCache[b].t||0); });
+      keys.slice(0, keys.length - 30).forEach(function(k){ delete detailCache[k]; });
+    }
+    sessionStorage.setItem(DETAIL_CACHE_KEY, JSON.stringify(detailCache));
+  } catch(e){}
+}
+function getCachedDetail(row){
+  const c = detailCache[String(row)];
+  if(!c) return null;
+  if(Date.now() - (c.t||0) > 30*60*1000) return null;
+  return c.d;
+}
+function putCachedDetail(row, d){
+  if(!d || !d.body) return;
+  detailCache[String(row)] = { t: Date.now(), d: d };
+  saveDetailCache();
+}
+function schedulePrefetch(jobs){
+  prefetchQueue = (jobs || []).filter(function(j){ return !isLancers(j) && !getCachedDetail(j.row); }).slice(0, PREFETCH_COUNT);
+  runPrefetch();
+}
+function runPrefetch(){
+  if(prefetching) return;
+  const j = prefetchQueue.shift();
+  if(!j) return;
+  prefetching = true;
+  api('detail', { url: j.url, row: j.row }, 30000).then(function(d){
+    putCachedDetail(j.row, d);
+  }).catch(function(){}).then(function(){
+    prefetching = false;
+    setTimeout(runPrefetch, 300);
   });
 }
 
@@ -585,6 +635,7 @@ function render(){
     };
     list.appendChild(card);
   });
+  schedulePrefetch(shown);
 }
 
 function setStatusFilter(f){
@@ -659,9 +710,27 @@ function openSheet(job){
 
   if(lancers) return; // ランサーズは自動取得しない
 
-  // 非同期で全文＋クライアント名を取得して表示を差し替え（30秒でタイムアウト）
-  apiRetry('detail', { url: job.url, row: job.row }, 30000).then(function(detail){
+  // 募集終了の実地確認は本文表示とは別に裏で行う（build 2026-09-22b）
+  function checkClosedInBackground(){
+    api('closedcheck', { url: job.url, row: job.row }, 20000).then(function(res){
+      if(res && res.closed && currentJob && currentJob.row === job.row && !document.getElementById('closed-warn')){
+        const sb = document.getElementById('sheet-body');
+        if(sb) sb.insertAdjacentHTML('afterbegin', '<div id="closed-warn" class="skip-msg">⚠️ この案件は募集が終了しています。一覧を更新すると表示されなくなります。</div>');
+        const idx = JOBS.findIndex(function(x){ return x.row === job.row; });
+        if(idx >= 0) JOBS[idx].closed = true;
+      }
+    }).catch(function(){});
+  }
+
+  // 先読み済みなら即表示（API を待たない）
+  const cached = getCachedDetail(job.row);
+  const detailPromise = cached
+    ? Promise.resolve(cached)
+    : apiRetry('detail', { url: job.url, row: job.row }, 30000).then(function(d){ putCachedDetail(job.row, d); return d; });
+
+  detailPromise.then(function(detail){
     if(!detail) return;
+    checkClosedInBackground();
     // サーバー側の実地確認で募集終了と分かった場合は明示する
     if(detail.closed && !document.getElementById('closed-warn')){
       const sb = document.getElementById('sheet-body');
