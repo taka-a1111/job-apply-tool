@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<!-- BUILD_TAG: 2026-09-23a -->
+<!-- BUILD_TAG: 2026-09-24a -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
@@ -122,6 +122,12 @@
   .toast.show { opacity:1; }
 
   /* ① 継続案件バッジ */
+  /* build 2026-09-24a：応募文セット済み・要情報・対象外の表示 */
+  .ready-tag { display:flex; align-items:center; gap:6px; font-size:13px; font-weight:700; padding:6px 10px; border-radius:8px; background:rgba(6,199,85,.16); color:#3ddc84; border:1px solid rgba(6,199,85,.55); margin-top:8px; }
+  .need-tag { display:block; font-size:12px; padding:5px 10px; border-radius:8px; background:rgba(230,189,92,.12); color:#e6bd5c; border:1px solid rgba(230,189,92,.4); margin-top:8px; line-height:1.5; }
+  .ng-tag { display:block; font-size:12px; padding:5px 10px; border-radius:8px; background:rgba(150,150,150,.12); color:#9aa3ad; border:1px solid rgba(150,150,150,.35); margin-top:8px; line-height:1.5; }
+  .card.ready { border-color:rgba(6,199,85,.6); }
+  .gen-btn.ready-btn { background:#06c755; }
   .cont-tag { display:inline-block; font-size:12px; padding:2px 8px; border-radius:6px; background:rgba(126,200,255,.14); color:#7ec8ff; border:1px solid rgba(126,200,255,.35); margin-top:8px; margin-left:6px; }
 
   /* 優先度バッジ（A案・ルールベース）：ベタ塗りで未応募バッジと明確に区別 */
@@ -169,6 +175,7 @@
   <div class="filters" id="filters">
     <button class="fbtn" data-f="all">すべて</button>
     <button class="fbtn active" data-f="todo">未応募</button>
+    <button class="fbtn" data-f="ready" id="fbtn-ready">✅ セット済み</button>
     <button class="fbtn" data-f="done">応募済み</button>
     <button class="fbtn" data-g="ライティング">ライティング</button>
     <button class="fbtn" data-g="HP制作">HP制作</button>
@@ -225,12 +232,12 @@
     </div>
   </div>
 
-  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-09-23a</div>
+  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-09-24a</div>
 
   <div class="toast" id="toast">コピーしました！</div>
 
 <script>
-console.log('BUILD_TAG: 2026-09-23a');
+console.log('BUILD_TAG: 2026-09-24a');
 
 // ---------- ③ ロゴ／Castのタップで更新 ----------
 document.getElementById('brand').onclick = loadJobs;
@@ -632,6 +639,11 @@ function timeBounds(){
   return { todayStart: todayStart, weekStart: weekStart };
 }
 
+// 応募文が下書きとしてセット済みか（未応募・応募不可ではない）
+function isReady(j){
+  return j && j.status!=='応募済み' && j.body && String(j.body).indexOf('【応募不可】')!==0;
+}
+
 function render(){
   const tb = timeBounds();
   // 募集終了（closed）は一覧に一切載せない
@@ -654,6 +666,7 @@ function render(){
   if(filterStatus==='all') shown = shown.filter(function(j){return !isExpired(j);});
   if(filterStatus==='todo') shown = shown.filter(function(j){return j.status!=='応募済み' && !isExpired(j);});
   if(filterStatus==='done') shown = shown.filter(function(j){return j.status==='応募済み';});
+  if(filterStatus==='ready') shown = shown.filter(function(j){return isReady(j) && !isExpired(j);});
   if(filterStatus==='week') shown = shown.filter(function(j){return j.status==='応募済み' && j.appliedTs && j.appliedTs >= timeBounds().weekStart;});
   if(filterStatus==='today') shown = shown.filter(function(j){return j.status==='応募済み' && j.appliedTs && j.appliedTs >= timeBounds().todayStart;});
   if(filterGenre) shown = shown.filter(function(j){return j.genre===filterGenre;});
@@ -662,6 +675,19 @@ function render(){
   if((filterStatus==='all' || filterStatus==='todo') && sortMode==='prio'){
     shown.sort(function(a,b){ return scoreJob(b) - scoreJob(a); });
   }
+  // セット済みの案件を未応募一覧の先頭に寄せる（締切が近い順）
+  if(filterStatus==='todo' || filterStatus==='ready'){
+    const dl = function(j){ const m=String(j.deadline||'').match(/(\d+)\/(\d+)/); return m ? (parseInt(m[1],10)*100+parseInt(m[2],10)) : 9999; };
+    shown.sort(function(a,b){
+      const ra = isReady(a)?0:1, rb = isReady(b)?0:1;
+      if(ra!==rb) return ra-rb;
+      if(ra===0) return dl(a)-dl(b);
+      return 0;
+    });
+  }
+  // フィルタボタンに件数を表示
+  const fr = document.getElementById('fbtn-ready');
+  if(fr) fr.textContent = '✅ セット済み ' + JOBS.filter(function(j){ return isReady(j) && !isExpired(j); }).length;
 
   const list = document.getElementById('list');
   if(shown.length===0){ list.innerHTML='<div class="empty">該当する案件はありません</div>'; return; }
@@ -670,16 +696,22 @@ function render(){
   shown.forEach(function(j){
     const applied = j.status==='応募済み';
     const card = document.createElement('div');
-    card.className='card'+(applied?' applied':'');
+    card.className='card'+(applied?' applied':'')+(!applied && isReady(j)?' ready':'');
     const badge = applied ? '<span class="badge done">応募済み</span>' : '<span class="badge todo">未応募</span>';
     const clientLine = j.clientName
       ? '<div class="card-client">👤 '+esc(j.clientName)+(j.certified?' <span class="cert-mark">認定</span>':'')+'</div>'
       : '';
     const contractTag = j.contract ? '<div class="contract-tag">🤝 契約歴あり（'+esc(j.contract)+'）</div>' : '';
+    let draftTag = '';
+    if(!applied && isReady(j)) draftTag = '<div class="ready-tag">✅ 応募文セット済み（開くとすぐ表示）</div>';
+    else if(!applied && j.draftSkip){
+      const ds = String(j.draftSkip);
+      draftTag = ds.indexOf('要情報')===0 ? '<div class="need-tag">📝 '+esc(ds)+'</div>' : '<div class="ng-tag">'+esc(ds)+'</div>';
+    }
     card.innerHTML =
       '<div class="card-top"><span class="platform">'+esc(j.platform)+'</span><span style="display:flex; gap:6px; align-items:center;">'+(applied?'':prioHtml(j))+badge+'</span></div>'+
       '<div class="title">'+esc(j.title)+'</div>'+
-      clientLine+contractTag+
+      clientLine+contractTag+draftTag+
       '<div class="meta"><span>💰 '+esc(j.reward||'応相談')+'</span><span>📅 〜'+esc(j.deadline)+'</span><span>'+esc(j.entry||'')+'</span></div>'+
       '<div class="card-foot"><span><span class="genre-tag">'+esc(j.genre)+'</span>'+(isContinuous(j)?'<span class="cont-tag">🔁 継続あり</span>':'')+'</span><button class="hide-btn" data-row="'+j.row+'">非表示</button></div>';
     card.onclick = function(e){
@@ -758,7 +790,11 @@ function openSheet(job){
   if(job.status==='応募済み' && job.body){
     html += renderResult(job.body, true, job.note);
   } else {
-    html += '<button class="gen-btn" id="genbtn">応募文作成</button>';
+    if(isReady(job)){
+      html += '<button class="gen-btn ready-btn" id="genbtn">✅ セット済みの応募文を表示</button>';
+    } else {
+      html += '<button class="gen-btn" id="genbtn">応募文作成</button>';
+    }
   }
   document.getElementById('sheet-body').innerHTML = html;
   overlay.classList.add('show');
@@ -882,6 +918,16 @@ function getPastedText(){
 }
 function doGenerate(){
   if(currentJob.contract && !confirm('契約歴のあるクライアント（'+currentJob.contract+'）です。\n応募文を作成しますか？')) return;
+  // build 2026-09-24a：セット済みの応募文は手元のものを即座に表示し、応募済みの記録は裏で行う
+  if(isReady(currentJob)){
+    const row = currentJob.row, body = currentJob.body;
+    handleResult({ body: body, status: '応募済み', note: '' });
+    api('generate', { row: row }).catch(function(){
+      // 記録に失敗しても表示とコピーはできている。次回の一覧更新で再確認する
+      showToastMsg('応募済みの記録に失敗しました。一覧を更新してください');
+    });
+    return;
+  }
   const pasted = getPastedText();
   showTyping();
   setPending(currentJob.row);
