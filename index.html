@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<!-- BUILD_TAG: 2026-09-22e -->
+<!-- BUILD_TAG: 2026-09-23a -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
@@ -225,12 +225,12 @@
     </div>
   </div>
 
-  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-09-22e</div>
+  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-09-23a</div>
 
   <div class="toast" id="toast">コピーしました！</div>
 
 <script>
-console.log('BUILD_TAG: 2026-09-22e');
+console.log('BUILD_TAG: 2026-09-23a');
 
 // ---------- ③ ロゴ／Castのタップで更新 ----------
 document.getElementById('brand').onclick = loadJobs;
@@ -985,13 +985,44 @@ function autoCopy(text){
   }
 }
 function failHandler(e){
-  // 通信が切れてもサーバー側は完走している可能性が高い。
-  // 通信エラーのときだけ再読み込みしてセッションを張り直し、保存済みの結果を復元する。
+  // build 2026-09-23a：生成はサーバー側で完走していることが多い。
+  // GAS は応答を別URLへ転送して返すため、生成に時間がかかると転送先が期限切れになり
+  // HTTP 404 などが返ることがある（結果はシートに保存済み）。
+  // どんなエラーでも、エラーを表示する前に保存済みの応募文を取りに行く。
+  const row = getPending() || (currentJob && currentJob.row);
   const isNetworkError = e && (e.name === 'TypeError' || /Failed to fetch|NetworkError|Load failed/i.test(String(e.message||e)));
-  if(getPending() && isNetworkError){
-    if(safeReload('generate')) return;
+  if(!row){ showGenerateError(e); return; }
+  let tries = 0;
+  const poll = function(){
+    tries++;
+    api('savedResult', { row: row }, 15000).then(function(saved){
+      if(saved && saved.body){
+        clearPending();
+        if(currentJob && currentJob.row === row){
+          handleResult({ body: saved.body, status: saved.status, note: '' });
+        }
+        return;
+      }
+      if(tries < 8){ setTimeout(poll, 4000); return; }   // 生成がまだ続いている可能性。最大約30秒待つ
+      clearPending();
+      showGenerateError(e);
+    }).catch(function(err2){
+      // 保存済みの確認そのものが通信エラー → セッション切れ。再読み込みして復元する
+      const net2 = err2 && (err2.name === 'TypeError' || /Failed to fetch|NetworkError|Load failed/i.test(String(err2.message||err2)));
+      if((isNetworkError || net2) && safeReload('generate')) return;
+      if(tries < 8){ setTimeout(poll, 4000); return; }
+      clearPending();
+      showGenerateError(e);
+    });
+  };
+  const sb = document.getElementById('sheet-body');
+  if(sb && !document.getElementById('recover-msg')){
+    sb.insertAdjacentHTML('beforeend', '<div id="recover-msg" class="note-msg">⏳ 応答の受け取りに失敗したため、保存済みの応募文を確認しています…</div>');
   }
-  clearPending();
+  poll();
+}
+function showGenerateError(e){
+  const rm = document.getElementById('recover-msg'); if(rm) rm.remove();
   document.getElementById('sheet-body').innerHTML += '<div class="skip-msg">エラー：'+esc(String(e.message||e))+'<br>「応募文作成」をもう一度押してください。</div>';
   bindSheetButtons();
 }
