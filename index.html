@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<!-- BUILD_TAG: 2026-09-24a -->
+<!-- BUILD_TAG: 2026-09-24b -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
@@ -124,6 +124,10 @@
   /* ① 継続案件バッジ */
   /* build 2026-09-24a：応募文セット済み・要情報・対象外の表示 */
   .ready-tag { display:flex; align-items:center; gap:6px; font-size:13px; font-weight:700; padding:6px 10px; border-radius:8px; background:rgba(6,199,85,.16); color:#3ddc84; border:1px solid rgba(6,199,85,.55); margin-top:8px; }
+  /* build 2026-09-24b：条件提示に入れる金額 */
+  .price-tag { display:block; font-size:13px; font-weight:700; padding:6px 10px; border-radius:8px; background:rgba(92,160,230,.14); color:#8ec5ff; border:1px solid rgba(92,160,230,.5); margin-top:6px; line-height:1.5; }
+  .price-box { font-size:14px; padding:10px 12px; border-radius:10px; background:rgba(92,160,230,.12); color:#cfe6ff; border:1px solid rgba(92,160,230,.5); margin:10px 0; line-height:1.6; }
+  .price-box b { color:#8ec5ff; font-weight:700; }
   .need-tag { display:block; font-size:12px; padding:5px 10px; border-radius:8px; background:rgba(230,189,92,.12); color:#e6bd5c; border:1px solid rgba(230,189,92,.4); margin-top:8px; line-height:1.5; }
   .ng-tag { display:block; font-size:12px; padding:5px 10px; border-radius:8px; background:rgba(150,150,150,.12); color:#9aa3ad; border:1px solid rgba(150,150,150,.35); margin-top:8px; line-height:1.5; }
   .card.ready { border-color:rgba(6,199,85,.6); }
@@ -232,12 +236,12 @@
     </div>
   </div>
 
-  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-09-24a</div>
+  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-09-24b</div>
 
   <div class="toast" id="toast">コピーしました！</div>
 
 <script>
-console.log('BUILD_TAG: 2026-09-24a');
+console.log('BUILD_TAG: 2026-09-24b');
 
 // ---------- ③ ロゴ／Castのタップで更新 ----------
 document.getElementById('brand').onclick = loadJobs;
@@ -703,7 +707,7 @@ function render(){
       : '';
     const contractTag = j.contract ? '<div class="contract-tag">🤝 契約歴あり（'+esc(j.contract)+'）</div>' : '';
     let draftTag = '';
-    if(!applied && isReady(j)) draftTag = '<div class="ready-tag">✅ 応募文セット済み（開くとすぐ表示）</div>';
+    if(!applied && isReady(j)) draftTag = '<div class="ready-tag">✅ 応募文セット済み（開くとすぐ表示）</div>' + (j.price ? '<div class="price-tag">💴 提示金額：'+esc(j.price)+'</div>' : '');
     else if(!applied && j.draftSkip){
       const ds = String(j.draftSkip);
       draftTag = ds.indexOf('要情報')===0 ? '<div class="need-tag">📝 '+esc(ds)+'</div>' : '<div class="ng-tag">'+esc(ds)+'</div>';
@@ -787,6 +791,8 @@ function openSheet(job){
     html += '<div class="paste-hint">📋 ランサーズは募集文を自動取得できません。上のリンクから案件ページを開き、募集本文をコピーして下に貼り付けると、内容に沿った応募文を作成できます（貼り付けなしでも概要だけで作成可能）。</div>';
     html += '<textarea class="paste-area" id="paste-area" placeholder="ここに募集本文を貼り付け（任意）"></textarea>';
   }
+  // 条件提示に入れる金額（応募文と一緒にセットされている場合）
+  if(job.price) html += '<div class="price-box">💴 条件提示に入れる金額：<b>'+esc(job.price)+'</b></div>';
   if(job.status==='応募済み' && job.body){
     html += renderResult(job.body, true, job.note);
   } else {
