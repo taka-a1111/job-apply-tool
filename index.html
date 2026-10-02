@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<!-- BUILD_TAG: 2026-09-24b -->
+<!-- BUILD_TAG: 2026-10-02a -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
@@ -115,6 +115,11 @@
   .contract-tag { display:inline-flex; align-items:center; gap:5px; font-size:12px; color:#7ec8ff; background:rgba(80,160,255,.14); border:1px solid rgba(80,160,255,.35); padding:3px 9px; border-radius:6px; margin-top:6px; }
   .contract-warn { background:rgba(80,160,255,.12); border:1px solid rgba(80,160,255,.4); color:#a8d4ff; font-size:14px; padding:11px 13px; border-radius:10px; line-height:1.6; margin-bottom:10px; }
   .contract-warn b { color:#cde7ff; }
+  /* build 2026-10-02a：契約中は目立つ橙、過去契約は青で区別する */
+  .contract-tag.active { color:#fff; background:#e67e22; border-color:#e67e22; font-weight:700; }
+  .contract-warn.active { background:rgba(230,126,34,.16); border-color:#e67e22; color:#ffd2a8; }
+  .contract-warn.active b { color:#fff; }
+  .card.contract-active { border-left:4px solid #e67e22; }
   .force-btn { width:100%; background:transparent; color:var(--amber); border:1.5px solid var(--amber); border-radius:12px; padding:12px; font-size:15px; font-weight:600; cursor:pointer; font-family:inherit; margin-top:10px; }
   .force-btn:active { background:rgba(230,189,92,.12); }
 
@@ -241,7 +246,7 @@
   <div class="toast" id="toast">コピーしました！</div>
 
 <script>
-console.log('BUILD_TAG: 2026-09-24b');
+console.log('BUILD_TAG: 2026-10-02a');
 
 // ---------- ③ ロゴ／Castのタップで更新 ----------
 document.getElementById('brand').onclick = loadJobs;
@@ -705,7 +710,8 @@ function render(){
     const clientLine = j.clientName
       ? '<div class="card-client">👤 '+esc(j.clientName)+(j.certified?' <span class="cert-mark">認定</span>':'')+'</div>'
       : '';
-    const contractTag = j.contract ? '<div class="contract-tag">🤝 契約歴あり（'+esc(j.contract)+'）</div>' : '';
+    const contractTag = j.contract ? contractTagHtml(j.contract, j.contractMemo) : '';
+    if(j.contract && isActiveContract(j.contract)) card.classList.add('contract-active');
     let draftTag = '';
     if(!applied && isReady(j)) draftTag = '<div class="ready-tag">✅ 応募文セット済み（開くとすぐ表示）</div>' + (j.price ? '<div class="price-tag">💴 提示金額：'+esc(j.price)+'</div>' : '');
     else if(!applied && j.draftSkip){
@@ -913,9 +919,22 @@ function bindSheetButtons(){
   if(f) f.onclick=doForceGenerate;
 }
 
+// build 2026-10-02a：契約クライアントの表示（契約中／過去に契約を区別）
+function isActiveContract(status){ return String(status||'').indexOf('契約中') !== -1; }
+function contractMemoText(memo){ return String(memo||'').replace(/^自動：/, ''); }
+function contractCount(memo){ const m = String(memo||'').match(/契約(\d+)件/); return m ? m[1] : ''; }
+function contractTagHtml(status, memo){
+  if(isActiveContract(status)) return '<div class="contract-tag active">🔥 現在契約中のクライアント</div>';
+  const n = contractCount(memo);
+  if(String(status).indexOf('過去') !== -1) return '<div class="contract-tag">🤝 過去に契約したクライアント'+(n?'（'+n+'件）':'')+'</div>';
+  return '<div class="contract-tag">🤝 契約歴あり（'+esc(status)+'）</div>';
+}
 function contractWarnHtml(status, memo){
-  return '<div id="contract-warn" class="contract-warn">🤝 <b>契約歴のあるクライアントです（'+esc(status)+'）</b>'
-    + (memo ? '<br>'+esc(memo) : '') + '</div>';
+  const active = isActiveContract(status);
+  const head = active ? '🔥 <b>現在契約中のクライアントです</b>'
+    : (String(status).indexOf('過去') !== -1 ? '🤝 <b>過去に契約したクライアントです</b>' : '🤝 <b>契約歴のあるクライアントです（'+esc(status)+'）</b>');
+  const m = contractMemoText(memo);
+  return '<div id="contract-warn" class="contract-warn'+(active?' active':'')+'">' + head + (m ? '<br>'+esc(m) : '') + '</div>';
 }
 
 function getPastedText(){
@@ -923,7 +942,7 @@ function getPastedText(){
   return ta ? ta.value.trim() : '';
 }
 function doGenerate(){
-  if(currentJob.contract && !confirm('契約歴のあるクライアント（'+currentJob.contract+'）です。\n応募文を作成しますか？')) return;
+  if(currentJob.contract && !confirm((isActiveContract(currentJob.contract)?'現在契約中のクライアントです。':'過去に契約したクライアントです。')+'\n応募文を作成しますか？')) return;
   // build 2026-09-24a：セット済みの応募文は手元のものを即座に表示し、応募済みの記録は裏で行う
   if(isReady(currentJob)){
     const row = currentJob.row, body = currentJob.body;
