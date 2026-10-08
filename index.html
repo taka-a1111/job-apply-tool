@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<!-- BUILD_TAG: 2026-10-02a -->
+<!-- BUILD_TAG: 2026-10-08a -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
@@ -246,7 +246,7 @@
   <div class="toast" id="toast">コピーしました！</div>
 
 <script>
-console.log('BUILD_TAG: 2026-10-02a');
+console.log('BUILD_TAG: 2026-10-08a');
 
 // ---------- ③ ロゴ／Castのタップで更新 ----------
 document.getElementById('brand').onclick = loadJobs;
@@ -788,25 +788,27 @@ function openSheet(job){
   } else if(!lancers){
     html += '<div id="client-line" class="client-line">👤 クライアント名を取得中…</div>';
   }
+  // build 2026-10-08a：セット済みの応募文は、募集文の上にボタンと提示金額を出す（下までスクロールせずに押せるように）
+  const readyTop = !(job.status==='応募済み' && job.body) && isReady(job);
+  if(readyTop){
+    if(job.price) html += '<div class="price-box">💴 条件提示に入れる金額：<b>'+esc(job.price)+'</b></div>';
+    html += '<button class="gen-btn ready-btn" id="genbtn">✅ セット済みの応募文を表示</button>';
+  }
   html += '<div id="full-body" class="job-detail">'+esc(job.summary||'（概要なし）')
         + (lancers ? '' : '<div class="loading-inline">📄 募集文の全文を読み込み中…</div>')
         + '</div>';
   html += '<a class="sheet-link" href="'+esc(job.url)+'" target="_blank" rel="noopener">🔗 案件ページを開く</a>';
-  if(lancers){
+  if(lancers && !readyTop){
     // ランサーズは自動取得不可のため、募集本文の手動貼り付けで生成の質を上げる
     html += '<div class="paste-hint">📋 ランサーズは募集文を自動取得できません。上のリンクから案件ページを開き、募集本文をコピーして下に貼り付けると、内容に沿った応募文を作成できます（貼り付けなしでも概要だけで作成可能）。</div>';
     html += '<textarea class="paste-area" id="paste-area" placeholder="ここに募集本文を貼り付け（任意）"></textarea>';
   }
   // 条件提示に入れる金額（応募文と一緒にセットされている場合）
-  if(job.price) html += '<div class="price-box">💴 条件提示に入れる金額：<b>'+esc(job.price)+'</b></div>';
+  if(job.price && !readyTop) html += '<div class="price-box">💴 条件提示に入れる金額：<b>'+esc(job.price)+'</b></div>';
   if(job.status==='応募済み' && job.body){
     html += renderResult(job.body, true, job.note);
-  } else {
-    if(isReady(job)){
-      html += '<button class="gen-btn ready-btn" id="genbtn">✅ セット済みの応募文を表示</button>';
-    } else {
-      html += '<button class="gen-btn" id="genbtn">応募文作成</button>';
-    }
+  } else if(!readyTop){
+    html += '<button class="gen-btn" id="genbtn">応募文作成</button>';
   }
   document.getElementById('sheet-body').innerHTML = html;
   overlay.classList.add('show');
