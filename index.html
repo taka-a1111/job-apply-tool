@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<!-- BUILD_TAG: 2026-10-08a -->
+<!-- BUILD_TAG: 2026-10-13a -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
@@ -160,6 +160,10 @@
   .kw-del { background:transparent; color:#e88; border:1px solid #6a3a3a; border-radius:8px; padding:5px 12px; font-size:12.5px; cursor:pointer; font-family:inherit; }
   .kw-add { width:100%; background:transparent; color:var(--green); border:1px dashed var(--green); border-radius:10px; padding:11px; font-size:14px; cursor:pointer; font-family:inherit; margin-top:2px; }
   .set-save-row { display:flex; gap:8px; margin-top:16px; }
+  .applyall-wrap { padding:10px 12px 0; background:var(--card); }
+  .applyall-btn { width:100%; font-family:inherit; font-size:16px; font-weight:700; color:#04310f; background:var(--green); border:none; border-radius:10px; padding:12px; cursor:pointer; }
+  .applyall-btn:active { opacity:0.8; }
+  .applyall-btn.empty { background:#22262c; color:var(--muted); font-weight:600; }
   .set-note { font-size:12px; color:var(--muted); line-height:1.6; margin-top:12px; }
 </style>
 </head>
@@ -172,6 +176,10 @@
       <img class="logo" src="icon-192.png" alt="Cast">
       <h1>Cast</h1>
     </div>
+  </div>
+
+  <div class="applyall-wrap">
+    <button class="applyall-btn" id="applyall-btn" onclick="applyAll()">🚀 全件応募</button>
   </div>
 
   <div class="stats">
@@ -241,12 +249,12 @@
     </div>
   </div>
 
-  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-09-24b</div>
+  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-10-13a</div>
 
   <div class="toast" id="toast">コピーしました！</div>
 
 <script>
-console.log('BUILD_TAG: 2026-10-08a');
+console.log('BUILD_TAG: 2026-10-13a');
 
 // ---------- ③ ロゴ／Castのタップで更新 ----------
 document.getElementById('brand').onclick = loadJobs;
@@ -696,7 +704,10 @@ function render(){
   }
   // フィルタボタンに件数を表示
   const fr = document.getElementById('fbtn-ready');
-  if(fr) fr.textContent = '✅ セット済み ' + JOBS.filter(function(j){ return isReady(j) && !isExpired(j); }).length;
+  const readyN = JOBS.filter(function(j){ return isReady(j) && !isExpired(j) && !j.closed; }).length;
+  if(fr) fr.textContent = '✅ セット済み ' + readyN;
+  const ab = document.getElementById('applyall-btn');
+  if(ab){ ab.textContent = '🚀 全件応募（' + readyN + '件）'; ab.classList.toggle('empty', readyN===0); }
 
   const list = document.getElementById('list');
   if(shown.length===0){ list.innerHTML='<div class="empty">該当する案件はありません</div>'; return; }
@@ -1133,6 +1144,21 @@ document.querySelectorAll('.reason-item').forEach(function(btn){
     });
   };
 });
+
+// ---------- 全件応募：「全件応募して」をコピーし、Castプロジェクトの新規チャットを開く ----------
+const CAST_PROJECT_URL = 'https://claude.ai/project/019e92dc-656e-7345-86b8-8f19b84eff33';
+function applyAll(){
+  const text = '全件応募して';
+  // コピーとページを開く操作は、タップの直後に同期で行う（iPhoneで止められないように）
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).catch(function(){ fallbackCopy(text); });
+    } else { fallbackCopy(text); }
+  }catch(e){ fallbackCopy(text); }
+  setTimeout(function(){ showToastMsg('「全件応募して」をコピーしました'); }, 60);
+  const w = window.open(CAST_PROJECT_URL, '_blank');
+  if(!w) location.href = CAST_PROJECT_URL;
+}
 
 function copyText(text){
   if(navigator.clipboard && navigator.clipboard.writeText){
