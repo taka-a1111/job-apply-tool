@@ -42,12 +42,18 @@ CAST_URL = os.environ.get("CAST_URL", "https://script.google.com/macros/s/AKfycb
 CAST_TOKEN = os.environ.get("CAST_TOKEN", "")
 
 
-def get(url):
-    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept-Language": "ja"})
-    with urllib.request.urlopen(req, timeout=40) as r:
-        body = r.read().decode("utf-8", "replace")
-    time.sleep(WAIT)
-    return body
+def get(url, tries=3):
+    for n in range(tries):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept-Language": "ja"})
+            with urllib.request.urlopen(req, timeout=40) as r:
+                body = r.read().decode("utf-8", "replace")
+            time.sleep(WAIT)
+            return body
+        except Exception:
+            if n == tries - 1:
+                raise
+            time.sleep(10 * (n + 1))
 
 
 def text_of(fragment):
@@ -112,7 +118,17 @@ def cast_known_urls():
     return {j.get("url", "") for j in data.get("jobs", [])}
 
 
-def cast_import(jobs):
+def cast_import(jobs, tries=3):
+    for n in range(tries):
+        try:
+            return _cast_import(jobs)
+        except Exception as e:
+            if n == tries - 1:
+                return f"import error: {e}"
+            time.sleep(15 * (n + 1))
+
+
+def _cast_import(jobs):
     payload = json.dumps({"action": "importjobs", "token": CAST_TOKEN, "jobs": jobs}, ensure_ascii=False).encode("utf-8")
     req = urllib.request.Request(f"{CAST_URL}?api=1", data=payload, headers={"Content-Type": "text/plain", "User-Agent": UA})
     with urllib.request.urlopen(req, timeout=120) as r:
@@ -121,13 +137,27 @@ def cast_import(jobs):
 
 def main():
     dry = "--dry-run" in sys.argv
-    known = set() if dry and not CAST_TOKEN else cast_known_urls()
+    known = set()
+    if not (dry and not CAST_TOKEN):
+        for n in range(3):
+            try:
+                known = cast_known_urls()
+                break
+            except Exception as e:
+                if n == 2:
+                    print("Cast の一覧を読めなかったため中止:", e, file=sys.stderr)
+                    sys.exit(1)
+                time.sleep(15)
     found, skipped_budget = [], 0
     seen = set()
     for p in PARENTS:
         for page in range(1, 6):
             url = f"{BASE}/requests/categories/{p}?recruiting=true" + (f"&page={page}" if page > 1 else "")
-            items = parse_list(get(url))
+            try:
+                items = parse_list(get(url))
+            except Exception as e:
+                print("list error", p, page, e, file=sys.stderr)
+                break
             for it in items:
                 if it["id"] in seen:
                     continue
@@ -142,7 +172,7 @@ def main():
                 found.append(it)
             if len(items) < 40:
                 break
-    jobs = []
+    jobs, sent = [], 0
     limit = next((int(a.split("=")[1]) for a in sys.argv if a.startswith("--limit=")), 0)
     if limit:
         found = found[:limit]
@@ -164,14 +194,17 @@ def main():
             "clientName": it["client"],
             "fullText": full,
         })
+        if not dry and len(jobs) - sent >= 10:
+            print(cast_import(jobs[sent:]), flush=True)
+            sent = len(jobs)
     print(json.dumps({"new": len(jobs), "skipped_low_budget": skipped_budget,
                       "titles": [j["title"][:40] for j in jobs]}, ensure_ascii=False))
     if dry or not jobs:
         if dry:
             json.dump(jobs, open("coconala_jobs.json", "w"), ensure_ascii=False, indent=1)
         return
-    for i in range(0, len(jobs), 20):
-        print(cast_import(jobs[i:i + 20]))
+    if len(jobs) > sent:
+        print(cast_import(jobs[sent:]), flush=True)
 
 
 if __name__ == "__main__":
