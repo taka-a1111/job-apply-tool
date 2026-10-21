@@ -105,9 +105,15 @@ def parse_detail(page_html, p):
     corp = (p.get("corporation") or {}).get("name") or ""
     if p.get("corpNameHidden") or set(corp) <= {"＊"}:
         corp = "社名非公開"
-    mn = (p.get("minBudget") or {}).get("label") or ""
-    mx = (p.get("maxBudget") or {}).get("label") or ""
-    reward = f"{mn}〜{mx}（月額）" if mn and mx and mn != mx else (f"{mx}（月額）" if mx else "応相談")
+    # Cast の単価判定は「◯円」の形で読むため、「8万」ではなく「80,000円」で書く
+    mn = (p.get("minBudget") or {}).get("id") or 0
+    mx = (p.get("maxBudget") or {}).get("id") or 0
+    if mn and mx and mn != mx:
+        reward = f"{mn:,}円 〜 {mx:,}円（月額）"
+    elif mx or mn:
+        reward = f"{(mx or mn):,}円（月額）"
+    else:
+        reward = "応相談"
     head = (f"【SOKUDAN #{p['id']}】{p.get('title', '')}\n"
             f"企業：{corp}\n"
             f"職種：{'、'.join(x.get('label', '') for x in p.get('professions') or [])}\n"
