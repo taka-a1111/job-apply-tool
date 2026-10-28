@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<!-- BUILD_TAG: 2026-10-13a -->
+<!-- BUILD_TAG: 2026-10-28a -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
@@ -96,6 +96,10 @@
   .gen-btn:disabled { background:#3a4148; }
 
   .note-msg { background:var(--amber-soft); color:var(--amber); font-size:14px; padding:10px 12px; border-radius:10px; line-height:1.5; margin-bottom:10px; }
+  /* build 2026-10-28a：〔要記入〕が残る応募文の警告 */
+  .fill-warn { background:#3a1f1f; color:#ffb4b4; font-size:14px; font-weight:bold; padding:10px 12px; border-radius:10px; border:1px solid #e05a5a; line-height:1.5; margin-bottom:8px; }
+  .fill-tag { display:block; font-size:12px; font-weight:bold; padding:5px 10px; border-radius:8px; background:rgba(224,90,90,.15); color:#ff8a8a; border:1px solid rgba(224,90,90,.55); margin-top:8px; line-height:1.5; }
+  mark.need-fill { background:#e05a5a; color:#fff; font-weight:bold; padding:0 2px; border-radius:3px; }
   .skip-msg { background:#3a1f1f; color:#f3b4b4; font-size:15px; padding:12px 14px; border-radius:10px; line-height:1.5; }
   .result-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:6px 0 8px; }
   .result-label { font-size:14px; color:var(--muted); }
@@ -249,12 +253,12 @@
     </div>
   </div>
 
-  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-10-13a</div>
+  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-10-28a</div>
 
   <div class="toast" id="toast">コピーしました！</div>
 
 <script>
-console.log('BUILD_TAG: 2026-10-13a');
+console.log('BUILD_TAG: 2026-10-28a');
 
 // ---------- ③ ロゴ／Castのタップで更新 ----------
 document.getElementById('brand').onclick = loadJobs;
@@ -729,6 +733,7 @@ function render(){
       const ds = String(j.draftSkip);
       draftTag = ds.indexOf('要情報')===0 ? '<div class="need-tag">📝 '+esc(ds)+'</div>' : '<div class="ng-tag">'+esc(ds)+'</div>';
     }
+    if(fillCount(j.body)) draftTag += '<div class="fill-tag">⚠️ 応募文に〔要記入〕が'+fillCount(j.body)+'か所残っています</div>';
     card.innerHTML =
       '<div class="card-top"><span class="platform">'+esc(j.platform)+'</span><span style="display:flex; gap:6px; align-items:center;">'+(applied?'':prioHtml(j))+badge+'</span></div>'+
       '<div class="title">'+esc(j.title)+'</div>'+
@@ -911,8 +916,10 @@ function renderResult(body, applied, note){
     return '<div class="skip-msg">⚠️ '+esc(body.replace('【応募不可】',''))+'<br><span style="font-size:12.5px;opacity:.85;">AIが応募不可と判断しましたが、内容を確認のうえ応募することもできます。</span></div>'
       + '<button class="force-btn" id="forcebtn">それでも応募文を作成する</button>';
   }
+  const nFill = fillCount(body);
+  if(nFill) html += '<div class="fill-warn">⚠️ 〔要記入〕が'+nFill+'か所残っています。赤い部分を埋めてから送ってください。</div>';
   html += '<div class="result-head"><span class="result-label">✅ 応募文'+(applied?'（応募済み）':'（作成しました）')+'</span><button class="copy-btn-top" id="copybtn">コピー</button></div>';
-  html += '<div class="app-text" id="apptext">'+esc(body)+'</div>';
+  html += '<div class="app-text" id="apptext">'+markFill(esc(body))+'</div>';
   html += '<div class="sub-actions"><button class="mini-btn" id="regenbtn">作り直す</button>';
   if(applied) html += '<button class="mini-btn" id="undobtn">未応募に戻す</button>';
   html += '</div>';
@@ -923,7 +930,7 @@ function bindSheetButtons(){
   const g=document.getElementById('genbtn');
   if(g) g.onclick=doGenerate;
   const c=document.getElementById('copybtn');
-  if(c) c.onclick=function(){ copyText(currentJob.body); };
+  if(c) c.onclick=function(){ if(!confirmFill(currentJob.body)) return; copyText(currentJob.body); };
   const r=document.getElementById('regenbtn');
   if(r) r.onclick=doRegenerate;
   const u=document.getElementById('undobtn');
@@ -1037,7 +1044,8 @@ function handleResult(res){
   render();
   // 生成できたら応募文を自動でコピー（応募不可のときは除く）
   if(res.body && res.body.indexOf('【応募不可】')!==0){
-    autoCopy(res.body);
+    if(fillCount(res.body)) showToastMsg('〔要記入〕が残っているため自動コピーしませんでした');
+    else autoCopy(res.body);
   }
 }
 
@@ -1177,6 +1185,14 @@ function fallbackCopy(text){
 const toast=document.getElementById('toast');
 function showToast(){ toast.textContent='コピーしました！'; toast.classList.add('show'); setTimeout(function(){toast.classList.remove('show');},1500); }
 function showToastMsg(msg){ toast.textContent=msg; toast.classList.add('show'); setTimeout(function(){toast.classList.remove('show');},1500); }
+// build 2026-10-28a：〔要記入：〜〕が残ったまま応募しないための判定
+function fillCount(body){ const m = String(body||'').match(/〔要記入[^〕]*〕/g); return m ? m.length : 0; }
+function markFill(html){ return String(html).replace(/〔要記入[^〕]*〕/g, function(x){ return '<mark class="need-fill">'+x+'</mark>'; }); }
+function confirmFill(text){
+  const n = fillCount(text);
+  if(!n) return true;
+  return confirm('〔要記入〕が'+n+'か所残っています。\n埋めずにこのままコピーしますか？');
+}
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 // ============================================================
