@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<!-- BUILD_TAG: 2026-10-28a -->
+<!-- BUILD_TAG: 2026-11-06a -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
@@ -140,6 +140,17 @@
   .need-tag { display:block; font-size:12px; padding:5px 10px; border-radius:8px; background:rgba(230,189,92,.12); color:#e6bd5c; border:1px solid rgba(230,189,92,.4); margin-top:8px; line-height:1.5; }
   .ng-tag { display:block; font-size:12px; padding:5px 10px; border-radius:8px; background:rgba(150,150,150,.12); color:#9aa3ad; border:1px solid rgba(150,150,150,.35); margin-top:8px; line-height:1.5; }
   .card.ready { border-color:rgba(6,199,85,.6); }
+  /* build 2026-11-06a：ロゴコンペ */
+  .logo-tag { display:block; font-size:13px; font-weight:700; padding:6px 10px; border-radius:8px; background:rgba(155,120,255,.16); color:#c3b0ff; border:1px solid rgba(155,120,255,.5); margin-top:8px; }
+  .logo-thumb { margin-top:8px; border-radius:10px; overflow:hidden; background:#fff; min-height:60px; display:flex; align-items:center; justify-content:center; color:#6b7280; font-size:12px; }
+  .logo-thumb img { width:100%; height:auto; display:block; }
+  .logo-big { border-radius:10px; overflow:hidden; background:#fff; margin:8px 0; min-height:80px; display:flex; align-items:center; justify-content:center; color:#6b7280; font-size:13px; }
+  .logo-big img { width:100%; height:auto; display:block; }
+  .logo-sub { display:flex; gap:8px; flex-wrap:wrap; margin:4px 0 10px; }
+  .logo-memo { width:100%; min-height:72px; background:#15181d; color:var(--text); border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-size:14.5px; font-family:inherit; box-sizing:border-box; }
+  .memo-tag { display:block; font-size:12.5px; padding:5px 10px; border-radius:8px; background:rgba(230,189,92,.12); color:#e6bd5c; border:1px solid rgba(230,189,92,.4); margin-top:6px; line-height:1.5; }
+  .check-tag { display:block; font-size:12px; color:#9aa3ad; margin-top:6px; }
+  .card.logo-card { border-left:4px solid #9b78ff; }
   .gen-btn.ready-btn { background:#06c755; }
   .cont-tag { display:inline-block; font-size:12px; padding:2px 8px; border-radius:6px; background:rgba(126,200,255,.14); color:#7ec8ff; border:1px solid rgba(126,200,255,.35); margin-top:8px; margin-left:6px; }
 
@@ -203,6 +214,7 @@
     <button class="fbtn" data-g="GAS・自動化">GAS</button>
     <button class="fbtn" data-g="SEOコンサル">SEO</button>
     <button class="fbtn" data-g="AI活用">AI活用</button>
+    <button class="fbtn" data-g="ロゴコンペ">🎨 ロゴ</button>
   </div>
 
   <div class="sortbar">
@@ -253,12 +265,12 @@
     </div>
   </div>
 
-  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-10-28a</div>
+  <div style="text-align:center; font-size:11px; color:#4a525c; padding:18px 0 6px;">build 2026-11-06a</div>
 
   <div class="toast" id="toast">コピーしました！</div>
 
 <script>
-console.log('BUILD_TAG: 2026-10-28a');
+console.log('BUILD_TAG: 2026-11-06a');
 
 // ---------- ③ ロゴ／Castのタップで更新 ----------
 document.getElementById('brand').onclick = loadJobs;
@@ -662,7 +674,97 @@ function timeBounds(){
 
 // 応募文が下書きとしてセット済みか（未応募・応募不可ではない）
 function isReady(j){
+  if(isLogoJob(j) && !j.logo) return false;   // ロゴコンペは画像と提案文がそろってセット済み
   return j && j.status!=='応募済み' && j.body && String(j.body).indexOf('【応募不可】')!==0;
+}
+
+// ---------- build 2026-11-06a：ロゴコンペ ----------
+function isLogoJob(j){ return !!j && j.genre==='ロゴコンペ'; }
+function isMemoPending(m){ m=String(m||'').trim(); return !!m && m.indexOf('【反映済み】')!==0; }
+const LOGO_IMG = {};   // row:kind → data URL（このページを開いている間だけ）
+function loadLogoImg(row, kind){
+  const key = row+':'+kind;
+  if(LOGO_IMG[key]) return Promise.resolve(LOGO_IMG[key]);
+  try{ const ss = sessionStorage.getItem('logo_'+key); if(ss){ LOGO_IMG[key]=ss; return Promise.resolve(ss); } }catch(e){}
+  return api('logoimg', { row: row, kind: kind }, 40000).then(function(r){
+    if(!r || !r.data) throw new Error((r && r.error) || '画像がありません');
+    const url = 'data:'+(r.mime||'image/png')+';base64,'+r.data;
+    LOGO_IMG[key] = url;
+    try{ if(url.length < 400000) sessionStorage.setItem('logo_'+key, url); }catch(e){}
+    return url;
+  });
+}
+function fillLogoImg(el, row, kind){
+  if(!el) return;
+  loadLogoImg(row, kind).then(function(url){
+    el.innerHTML = '<img alt="ロゴ案" src="'+url+'">';
+  }).catch(function(e){ el.textContent = '画像を読み込めませんでした（'+String(e.message||e)+'）'; });
+}
+function openLogoFull(row, kind){
+  loadLogoImg(row, kind).then(function(url){
+    const w = window.open();
+    if(w){ w.document.write('<title>ロゴ案</title><body style="margin:0;background:#fff"><img style="width:100%;height:auto" src="'+url+'"></body>'); w.document.close(); }
+  }).catch(function(e){ showToastMsg('画像を開けませんでした'); });
+}
+function logoCardHtml(j, applied){
+  let h = '';
+  if(!applied){
+    if(j.logo && j.body) h += '<div class="logo-tag">🎨 ロゴと提案文セット済み（画像を確認してから送信）</div>';
+    else if(j.logo) h += '<div class="logo-tag">🎨 ロゴ作成済み・提案文なし</div>';
+    else if(!j.draftSkip) h += '<div class="logo-tag">🎨 ロゴ未作成（定時の作成で作ります）</div>';
+  }
+  if(j.logo) h += '<div class="logo-thumb" data-logo-row="'+j.row+'">画像を読み込み中…</div>';
+  if(!applied && j.price) h += '<div class="price-tag">💴 報酬：'+esc(j.price)+'</div>';
+  if(isMemoPending(j.logoMemo)) h += '<div class="memo-tag">✏️ 修正メモ：'+esc(j.logoMemo)+'（次の作成で反映）</div>';
+  if(j.logoCheck) h += '<div class="check-tag">🔎 商標照合：'+esc(j.logoCheck)+'</div>';
+  return h;
+}
+function logoSheetHtml(job){
+  const applied = job.status==='応募済み';
+  let h = '';
+  if(job.logo){
+    h += '<div class="logo-big" id="logo-big">画像を読み込み中…</div>';
+    h += '<div class="logo-sub"><button class="mini-btn" id="logo-full">🔍 原寸で開く</button>'
+      + (job.logo.mark ? '<button class="mini-btn" id="logo-mark">マーク単体</button>' : '')
+      + '</div>';
+    if(job.logo.at) h += '<div class="check-tag">作成：'+esc(job.logo.at)+'</div>';
+  } else {
+    h += '<div class="logo-tag">🎨 ロゴはまだ作成されていません。定時の作成（平日 7:47・11:47・16:47）で作ります。</div>';
+  }
+  if(job.price) h += '<div class="price-box">💴 コンペの報酬：<b>'+esc(job.price)+'</b></div>';
+  if(job.logoCheck) h += '<div class="check-tag">🔎 商標照合：'+esc(job.logoCheck)+'</div>';
+  if(job.body){
+    h += '<div class="result-head"><span class="result-label">📝 提案文'+(applied?'（応募済み）':'（セット済み）')+'</span><button class="copy-btn-top" id="copybtn">コピー</button></div>';
+    h += '<div class="app-text" id="apptext">'+esc(job.body)+'</div>';
+  }
+  if(!applied){
+    h += '<div class="set-title" style="margin-top:14px;">✏️ 修正メモ（次の作成で反映します）</div>';
+    h += '<textarea class="logo-memo" id="logo-memo" placeholder="例：もっと明るい緑に／文字を太く／マークを簡単に">'+esc(isMemoPending(job.logoMemo)?job.logoMemo:'')+'</textarea>';
+    h += '<button class="gen-btn" id="logo-memo-save" style="margin-top:8px;">修正メモを保存</button>';
+    if(job.logoMemo && !isMemoPending(job.logoMemo)) h += '<div class="check-tag">前回のメモ：'+esc(job.logoMemo)+'</div>';
+    h += '<div class="check-tag">送るときは「全部送って」と送ってください。送る直前に商標を照合します。</div>';
+  }
+  return h;
+}
+function bindLogoSheet(job){
+  fillLogoImg(document.getElementById('logo-big'), job.row, 'thumb');
+  const f = document.getElementById('logo-full'); if(f) f.onclick = function(){ openLogoFull(job.row, 'sheet'); };
+  const m = document.getElementById('logo-mark'); if(m) m.onclick = function(){ openLogoFull(job.row, 'mark'); };
+  const c = document.getElementById('copybtn'); if(c) c.onclick = function(){ copyText(job.body); };
+  const sv = document.getElementById('logo-memo-save');
+  if(sv) sv.onclick = function(){
+    const text = (document.getElementById('logo-memo').value||'').trim();
+    sv.disabled = true; sv.textContent = '保存中…';
+    api('logomemo', { row: job.row, text: text }, 30000).then(function(r){
+      if(r && r.error) throw new Error(r.error);
+      job.logoMemo = text;
+      const idx = JOBS.findIndex(function(x){ return x.row===job.row; });
+      if(idx>=0) JOBS[idx].logoMemo = text;
+      saveLocalJobs(); render();
+      sv.textContent = text ? '保存しました（次の作成で反映）' : 'メモを消しました';
+      setTimeout(function(){ sv.disabled=false; sv.textContent='修正メモを保存'; }, 1800);
+    }).catch(function(e){ sv.disabled=false; sv.textContent='修正メモを保存'; showToastMsg('保存できませんでした：'+String(e.message||e)); });
+  };
 }
 
 function render(){
@@ -720,7 +822,7 @@ function render(){
   shown.forEach(function(j){
     const applied = j.status==='応募済み';
     const card = document.createElement('div');
-    card.className='card'+(applied?' applied':'')+(!applied && isReady(j)?' ready':'');
+    card.className='card'+(applied?' applied':'')+(!applied && isReady(j)?' ready':'')+(isLogoJob(j)?' logo-card':'');
     const badge = applied ? '<span class="badge done">応募済み</span>' : '<span class="badge todo">未応募</span>';
     const clientLine = j.clientName
       ? '<div class="card-client">👤 '+esc(j.clientName)+(j.certified?' <span class="cert-mark">認定</span>':'')+'</div>'
@@ -728,7 +830,11 @@ function render(){
     const contractTag = j.contract ? contractTagHtml(j.contract, j.contractMemo) : '';
     if(j.contract && isActiveContract(j.contract)) card.classList.add('contract-active');
     let draftTag = '';
-    if(!applied && isReady(j)) draftTag = '<div class="ready-tag">✅ 応募文セット済み（開くとすぐ表示）</div>' + (j.price ? '<div class="price-tag">💴 提示金額：'+esc(j.price)+'</div>' : '');
+    if(isLogoJob(j)){
+      draftTag = logoCardHtml(j, applied);
+      if(!applied && j.draftSkip){ const ds = String(j.draftSkip); draftTag += ds.indexOf('要情報')===0 ? '<div class="need-tag">📝 '+esc(ds)+'</div>' : '<div class="ng-tag">'+esc(ds)+'</div>'; }
+    }
+    else if(!applied && isReady(j)) draftTag = '<div class="ready-tag">✅ 応募文セット済み（開くとすぐ表示）</div>' + (j.price ? '<div class="price-tag">💴 提示金額：'+esc(j.price)+'</div>' : '');
     else if(!applied && j.draftSkip){
       const ds = String(j.draftSkip);
       draftTag = ds.indexOf('要情報')===0 ? '<div class="need-tag">📝 '+esc(ds)+'</div>' : '<div class="ng-tag">'+esc(ds)+'</div>';
@@ -749,6 +855,7 @@ function render(){
       openSheet(j);
     };
     list.appendChild(card);
+    if(isLogoJob(j) && j.logo) fillLogoImg(card.querySelector('.logo-thumb'), j.row, 'thumb');
   });
   schedulePrefetch(shown);
 }
@@ -803,6 +910,22 @@ function openSheet(job){
     html += '<div id="client-line" class="client-line">👤 ' + esc(job.clientName) + (job.certified ? ' <span class="cert-mark">認定</span>' : '') + '</div>';
   } else if(!lancers){
     html += '<div id="client-line" class="client-line">👤 クライアント名を取得中…</div>';
+  }
+  // build 2026-11-06a：ロゴコンペは画像・提案文・修正メモを出す（API 生成や「応募済みにする」ボタンは出さない）
+  if(isLogoJob(job)){
+    html += logoSheetHtml(job);
+    html += '<div class="set-title" style="margin-top:14px;">募集内容</div>';
+    html += '<div id="full-body" class="job-detail">'+esc(job.summary||'（概要なし）')+'<div class="loading-inline">📄 募集文の全文を読み込み中…</div></div>';
+    html += '<a class="sheet-link" href="'+esc(job.url)+'" target="_blank" rel="noopener">🔗 募集ページを開く</a>';
+    document.getElementById('sheet-body').innerHTML = html;
+    overlay.classList.add('show');
+    document.body.classList.add('modal-open');
+    bindLogoSheet(job);
+    const cachedL = getCachedDetail(job.row);
+    (cachedL ? Promise.resolve(cachedL) : apiRetry('detail', { url: job.url, row: job.row }, 30000).then(function(d){ putCachedDetail(job.row, d); return d; }))
+      .then(function(d){ const fb = document.getElementById('full-body'); if(fb) fb.textContent = (d && d.body) ? d.body : (job.summary||'（全文なし）'); const cl = document.getElementById('client-line'); if(cl && !job.clientName) cl.textContent = '👤 ' + ((d && d.client) || 'クライアント名：記載なし'); })
+      .catch(function(){ const fb = document.getElementById('full-body'); if(fb) fb.textContent = job.summary||'（全文を読み込めませんでした）'; });
+    return;
   }
   // build 2026-10-08a：セット済みの応募文は、募集文の上にボタンと提示金額を出す（下までスクロールせずに押せるように）
   const readyTop = !(job.status==='応募済み' && job.body) && isReady(job);
